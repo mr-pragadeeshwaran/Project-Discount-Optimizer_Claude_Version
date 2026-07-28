@@ -445,6 +445,50 @@ def api_table(name):
         df = df[[c for c in COLUMNS if c in df.columns]]
         return {"columns": list(df.columns), "rows": df.fillna("").values.tolist()}
 
+    if name == "elasticity":
+        # the elasticity board: the engine's actual DIALS per product x city —
+        # price elasticity, the marginal discount response at today's depth, the
+        # pay-line it must beat, and the resulting verdict. This is the evidence
+        # behind every cut/hold, made inspectable.
+        if not run:
+            raise FileNotFoundError("the elasticity board (run the monthly rebuild)")
+        ac = pd.read_csv(_need(os.path.join(run, "plan", "all_cells.csv"),
+                               "the elasticity board (run the monthly rebuild)"))
+        rec_p = os.path.join(run, "recommendations.csv")
+        if os.path.exists(rec_p):
+            rc = pd.read_csv(rec_p)
+            keep = [c for c in ("cell_id", "elasticity", "grammage", "confidence_score")
+                    if c in rc.columns]
+            ac = ac.merge(rc[keep], on="cell_id", how="left")
+        out = pd.DataFrame({
+            "product_id": ac.get("product_id"),
+            "cell_id":    ac.get("cell_id"),
+            "title":      ac.get("title"),
+            "pack":       ac.get("grammage", ""),
+            "city":       ac.get("city"),
+            "category":   ac.get("category"),
+            "elast":      pd.to_numeric(ac.get("elasticity"), errors="coerce").round(2),
+            "disc_now":   pd.to_numeric(ac.get("cur_disc"), errors="coerce").round(1),
+            "resp":       pd.to_numeric(ac.get("marg_beta"), errors="coerce").round(4),
+            "payline":    pd.to_numeric(ac.get("be_beta"), errors="coerce").round(4),
+        })
+        out["gap"] = (out["resp"] - out["payline"]).round(4)
+
+        def _verdict(r):
+            if bool(r.get("reliably_waste")):
+                return "Below pay-line — waste"
+            if bool(r.get("reliably_pays")):
+                return "Above pay-line — pays"
+            return "Uncertain — monitor"
+        out["test"] = ac.apply(_verdict, axis=1)
+        out["n_weeks"] = pd.to_numeric(ac.get("n_weeks"), errors="coerce").round(0)
+        out["disc_std"] = pd.to_numeric(ac.get("disc_std"), errors="coerce").round(1)
+        out["cat_r2"] = pd.to_numeric(ac.get("cat_r2"), errors="coerce").round(2)
+        out["confidence"] = ac.get("confidence")
+        # most-negative (most price-sensitive) first, then biggest shortfall
+        out = out.sort_values(["gap", "elast"], ascending=[True, True])
+        return {"columns": list(out.columns), "rows": out.fillna("").values.tolist()}
+
     if name == "prices":
         # the price board: optimal discount / SP / MRP / estimated sales / accuracy
         # for every product x city cell, straight from the pipeline's recommendations.

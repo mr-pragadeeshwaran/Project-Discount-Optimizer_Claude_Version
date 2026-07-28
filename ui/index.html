@@ -1514,11 +1514,13 @@ async function runStep(id) {
 
 /* ============================== CUT PLAN ============================== */
 const CUT_TABS = [
-  ['plan_all', 'Action plan'], ['prices', 'Price board'], ['cuts', 'Cuts'], ['reinvest', 'Reinvest'],
+  ['plan_all', 'Action plan'], ['prices', 'Price board'], ['elasticity', 'Elasticity'],
+  ['cuts', 'Cuts'], ['reinvest', 'Reinvest'],
   ['buckets', 'Buckets'], ['scenarios', 'Scenarios'], ['sensitivity', 'Stress test'],
 ];
 const TABLE_EMPTY = {
   plan_all:   ['The action plan', 'the full monthly rebuild (step 2 — Champion waste model)'],
+  elasticity: ['The elasticity board', 'the full monthly rebuild (step 2 — Champion waste model)'],
   prices:     ['The price board', 'the full monthly rebuild (step 1 — Build foundation)'],
   cuts:       ['The cut list', 'step 2 — Champion waste model (or the full rebuild)'],
   reinvest:   ['The reinvest list', 'step 2 — Champion waste model (or the full rebuild)'],
@@ -1543,6 +1545,9 @@ const COL_LABEL = {
   est_rev: 'Est. ₹ / day', conf_score: 'Confidence score',
   action: 'Action', disc_now: 'Discount now', disc_set: 'Set discount to',
   price_set: 'Price to set', gain_mo: 'Est. ₹ gain / month', why: 'Why',
+  elast: 'Price elasticity', resp: 'Lift per disc. point', payline: 'Pay-line to beat',
+  gap: 'Gap vs pay-line', test: 'Verdict', n_weeks: 'Weeks of data',
+  disc_std: 'Disc. variation (σ)', cat_r2: 'Category fit (R²)',
 };
 const RUP_COLS = { net_gain_mo:1, saving_mo:1, pred_net_rev_delta:1, actual_net_rev_delta:1,
   mrp:1, opt_sp:1, now_sp:1, est_rev:1, price_set:1, gain_mo:1 };
@@ -1575,6 +1580,18 @@ function fmtCell(col, v) {
   if (col === 'confidence') {
     const hi = String(v).toLowerCase() === 'high';
     return '<span class="confchip' + (hi ? ' hi' : '') + '">' + esc(v) + '</span>';
+  }
+  if (col === 'test') {
+    const a = String(v); let bg = 'var(--chipbg)', fg = 'var(--ink3)';
+    if (a.indexOf('Below') === 0) { bg = 'var(--accent-soft)'; fg = 'var(--accent-deep)'; }
+    else if (a.indexOf('Above') === 0) { bg = 'var(--goodbg)'; fg = 'var(--good)'; }
+    return '<span class="confchip" style="background:' + bg + ';color:' + fg + ';border-color:transparent;white-space:nowrap">' + esc(a) + '</span>';
+  }
+  if (col === 'gap') {
+    const n = toNum(v);
+    if (n == null) return '<span class="dim">—</span>';
+    const c = n < 0 ? 'var(--accent-deep)' : 'var(--good)';
+    return '<span style="color:' + c + ';font-weight:600">' + (n > 0 ? '+' : '') + n.toFixed(4) + '</span>';
   }
   if (col === 'action') {
     const a = String(v); let bg = 'var(--chipbg)', fg = 'var(--ink2)';
@@ -1650,7 +1667,8 @@ async function renderCutPlan() {
   $('#cut-tabs').innerHTML = CUT_TABS.map(t =>
     '<button class="tab' + (t[0] === CUT.tab ? ' on' : '') + '" data-cuttab="' + t[0] + '"' +
     ' aria-pressed="' + (t[0] === CUT.tab ? 'true' : 'false') + '">' + esc(t[1]) + '</button>').join('');
-  const filterable = CUT.tab === 'cuts' || CUT.tab === 'reinvest' || CUT.tab === 'prices' || CUT.tab === 'plan_all';
+  const filterable = CUT.tab === 'cuts' || CUT.tab === 'reinvest' || CUT.tab === 'prices'
+    || CUT.tab === 'plan_all' || CUT.tab === 'elasticity';
   $('#cut-searchwrap').style.display = filterable ? '' : 'none';
   $('#cut-cat').style.display = filterable ? '' : 'none';
   $('#cut-conf').style.display = filterable ? '' : 'none';
@@ -1702,7 +1720,19 @@ async function renderCutPlan() {
   const sumEl = $('#cut-summary');
   const stat = (ic, hue, v, l) => '<div class="cut-stat"><span class="cs-ic ' + hue + '">' + ic + '</span>' +
     '<span><div class="cs-v">' + v + '</div><div class="cs-l">' + esc(l) + '</div></span></div>';
-  if (name === 'plan_all' && sorted.length) {
+  if (name === 'elasticity' && sorted.length) {
+    const els = sorted.map(o => toNum(o.elast)).filter(v => v != null);
+    const med = els.length ? els.slice().sort((a, b) => a - b)[Math.floor(els.length / 2)] : 0;
+    const inel = els.filter(v => Math.abs(v) < 1).length;
+    const waste = sorted.filter(o => String(o.test || '').indexOf('Below') === 0).length;
+    const unc = sorted.filter(o => String(o.test || '').indexOf('Uncertain') === 0).length;
+    sumEl.innerHTML = '<div class="cut-summary">' +
+      stat(IC.grid, 'hc1', fmtIN(sorted.length), 'cells with a measured dial') +
+      stat(IC.scale, 'hc2', med.toFixed(2), 'median price elasticity') +
+      stat(IC.target, 'hc3', fmtIN(inel) + ' / ' + fmtIN(els.length), 'inelastic (|E| < 1)') +
+      stat(IC.scissors, 'hc4', fmtIN(waste), 'below pay-line · ' + fmtIN(unc) + ' uncertain') +
+      '</div>';
+  } else if (name === 'plan_all' && sorted.length) {
     const isAct = (o, a) => String(o.action || '').indexOf(a) === 0;
     const cutN = sorted.filter(o => isAct(o, 'Cut')).length;
     const cutRs = sorted.filter(o => isAct(o, 'Cut')).reduce((a, o) => a + (toNum(o.gain_mo) || 0), 0);
@@ -1748,7 +1778,11 @@ async function renderCutPlan() {
     : '<div class="card"><div class="empty"><div class="et">No rows match</div><div class="es">Try clearing the search or filters.</div></div></div>';
 
   /* footer */
-  if (name === 'plan_all') {
+  if (name === 'elasticity') {
+    foot.innerHTML = '<span><b>' + fmtIN(sorted.length) + '</b> cell' + (sorted.length === 1 ? '' : 's') +
+      ' · the measured dials behind every recommendation</span>' +
+      '<span class="dim">A cut is only banked when the lift per discount point sits reliably BELOW the pay-line 1/(100−d) — a negative gap. Elasticity nearer 0 = less price-sensitive.</span>';
+  } else if (name === 'plan_all') {
     foot.innerHTML = '<span><b>' + fmtIN(sorted.length) + '</b> cell' + (sorted.length === 1 ? '' : 's') +
       ' · every product × city has one action and the discount to set</span>' +
       '<span class="dim">Most cells read “hold” — for stock-gated, defensive or low-evidence cells, keeping the discount is the recommendation; the reason is in each row.</span>';
