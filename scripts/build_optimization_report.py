@@ -101,7 +101,8 @@ def compute(df, cut_ids, rein_ids):
         # Deepening a discount reprices the ENTIRE existing base, so beyond a low level
         # the step is ROAS-dilutive — those candidates are HELD, not increased.
         rein_target = min(be, cat_med) if cat_med > 0 else be
-        rein_cand = (not is_cut) and (cid in rein_ids) and (rein_target > cur_disc + 1.0)
+        rein_cand = (not is_cut) and (cid in rein_ids) and (rein_target > cur_disc + 1.0) \
+            and bool(r.get("reliably_pays"))   # same CI bar as cuts — candidates alone don't act
 
         hold_reason = ""
         head = 0.0

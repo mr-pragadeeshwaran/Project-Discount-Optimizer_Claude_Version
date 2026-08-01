@@ -181,6 +181,10 @@ REGISTRY = [
     ("STRATEGIC_SKUS", "list_id", "Brand identity",
      "Hero PRODUCT_IDs that must NEVER be auto-cut, whatever the model says. "
      "Separate with |. Write none for no hero protection."),
+    ("COMPETITOR_BRANDS", "list_text", "Brand identity",
+     "Competitor brand names (max 3, exactly as spelled in the platform export) "
+     "used to build the relative-price index that controls the demand model. "
+     "Separate with |. Default: Organic Tattva."),
     ("STRICT_OWN_BRAND_MATCH", "yes_no", "Brand identity",
      "yes = fail loudly if the brand patterns also match a competitor brand "
      "(e.g. 'Sun' catching 'Sunfeast'). Keep yes unless you truly own several "

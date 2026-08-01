@@ -218,6 +218,11 @@ HISTORICAL_FLOOR_LOOKBACK_DAYS = 90   # Look back 90 days for the floor
 # without you deciding to. Leave [] for no hero protection (cut purely on the
 # model + gates). ← EDIT ME: your hero SKU IDs.
 STRATEGIC_SKUS = []             # SKU IDs with override rules
+# Competitor brands (max 3, spelled exactly as in the platform export) used to
+# build the relative-price index (rpi_w) that controls the demand model.
+# Chosen over own category share, which is outcome-derived (units sit in its
+# numerator) and was shown to bias the discount coefficient as a bad control.
+COMPETITOR_BRANDS = ["Organic Tattva"]
 
 # ── Weekly discount-spend cap (tracker) ──
 # The tracker caps total discount spend at this fraction of gross each week.

@@ -76,15 +76,19 @@ def build_action_plan(run):
             key, set_disc = "cut", tgt
             gain = _num(r.get("net_gain_mo"))          # validated, bankable
             why = reason
-        elif cid in rein_ids:
+        elif r.get("bucket") == "a_stock":
+            # stock gate outranks everything incl. reinvest — a supply-capped
+            # shelf can't serve the demand an added discount would recruit
+            key, set_disc, gain, why = "hold_stock", cur, None, reason
+        elif r.get("bucket") == "b_competitive":
+            key, set_disc, gain, why = "hold_defend", cur, None, reason
+        elif cid in rein_ids and bool(r.get("reliably_pays")):
+            # candidates alone are directional; the SAME evidence bar as cuts
+            # applies — the whole CI must clear the pay-line (reliably_pays)
             key, set_disc = "reinvest", (be if be > cur else cur)
             gain = None                                # all_cells net_gain ~0 here; value is volume growth
             why = (f"discount reliably lifts sales and sits ~{head:.0f}pp below its "
                    f"break-even level ({be:.0f}%) — room to invest more profitably")
-        elif r.get("bucket") == "b_competitive":
-            key, set_disc, gain, why = "hold_defend", cur, None, reason
-        elif r.get("bucket") == "a_stock":
-            key, set_disc, gain, why = "hold_stock", cur, None, reason
         else:
             key, set_disc, gain, why = "monitor", cur, None, reason
 

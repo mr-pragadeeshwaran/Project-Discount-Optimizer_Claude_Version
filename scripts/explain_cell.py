@@ -68,12 +68,13 @@ def main(cell_id):
     w("Days are aggregated to weeks. `price` and `disc` are **volume-weighted** "
       "(a 500-unit day counts more than a 3-unit day); `osa`, `ad_sov`, `cat_share` are means.")
     w("")
-    w("| # | week | units | price ₹ | disc % | OSA % | ad_SOV | cat_share |")
-    w("|---|------|------:|--------:|-------:|------:|-------:|----------:|")
+    w("| # | week | units | price ₹ | disc % | OSA % | ad_SOV | org_SOV | RPI vs comp | cat_share |")
+    w("|---|------|------:|--------:|-------:|------:|-------:|--------:|------------:|----------:|")
     for i, r in g.iterrows():
         w(f"| {i+1} | {pd.to_datetime(r['week']).date()} | {r['units']:.0f} | "
           f"{r['price']:.1f} | {r['disc']:.1f} | {r['osa']:.0f} | "
-          f"{r['ad_sov']:.2f} | {r['cat_share']:.3f} |")
+          f"{r['ad_sov']:.2f} | {r.get('org_sov', float('nan')):.2f} | "
+          f"{r.get('rpi_w', float('nan')):.3f} | {r['cat_share']:.3f} |")
     w("")
     n_wk = len(g)
     w(f"**{n_wk} clean weeks** survived the pre-filters (festival/OOS/outlier/edge-week "
@@ -90,12 +91,14 @@ def main(cell_id):
     w(f"- **RECENT** = **last 4 weeks** "
       f"({pd.to_datetime(recent['week'].iloc[0]).date()} → {pd.to_datetime(recent['week'].iloc[-1]).date()})")
     w("")
-    w("| window mean | units | disc % | OSA % | ad_SOV | cat_share |")
-    w("|---|------:|-------:|------:|-------:|----------:|")
+    w("| window mean | units | disc % | OSA % | ad_SOV | org_SOV | RPI | cat_share |")
+    w("|---|------:|-------:|------:|-------:|--------:|----:|----------:|")
     w(f"| EARLY  | {early['units'].mean():.1f} | {early['disc'].mean():.2f} | "
-      f"{early['osa'].mean():.1f} | {early['ad_sov'].mean():.3f} | {early['cat_share'].mean():.4f} |")
+      f"{early['osa'].mean():.1f} | {early['ad_sov'].mean():.3f} | "
+      f"{early['org_sov'].mean():.3f} | {early['rpi_w'].mean():.3f} | {early['cat_share'].mean():.4f} |")
     w(f"| RECENT | {recent['units'].mean():.1f} | {recent['disc'].mean():.2f} | "
-      f"{recent['osa'].mean():.1f} | {recent['ad_sov'].mean():.3f} | {recent['cat_share'].mean():.4f} |")
+      f"{recent['osa'].mean():.1f} | {recent['ad_sov'].mean():.3f} | "
+      f"{recent['org_sov'].mean():.3f} | {recent['rpi_w'].mean():.3f} | {recent['cat_share'].mean():.4f} |")
     w("")
 
     cur_disc = float(np.average(recent["disc"], weights=recent["units"].clip(lower=1e-6)))
@@ -146,8 +149,9 @@ def main(cell_id):
         w(f"| `disc` (β) | {mm['beta_disc']:+.5f} | one more discount point → {mm['beta_disc']*100:+.2f}% units (near d=0) |")
         w(f"| `disc²` (β₂) | {mm['beta_disc2']:+.7f} | curvature — the response bends with depth |")
         w(f"| `log_osa` | {mm['beta_osa']:+.4f} | 1% better availability → {mm['beta_osa']:+.3f}% units |")
-        w(f"| `log_adsov` | {mm['beta_adsov']:+.4f} | ad visibility effect |")
-        w(f"| `comp_share` | {mm['beta_comp']:+.4f} | category-share effect |")
+        w(f"| `log_adsov` | {mm['beta_adsov']:+.4f} | paid ad visibility effect |")
+        w(f"| `log_orgsov` | {mm['beta_orgsov']:+.4f} | organic search visibility effect |")
+        w(f"| `rpi_w` | {mm['beta_comp']:+.4f} | competitor relative price — our price ÷ competitor's (MODEL v2: replaced own share, which was outcome-derived) |")
         w(f"| se(β) | {mm['se_disc']:.5f} | the uncertainty around β |")
         w(f"| R² (full) | {mm['r2_full']:.3f} | must clear the 0.60 floor → "
           f"{'PASSES' if mm['r2_full']>=0.60 else 'FAILS'} |")
@@ -203,15 +207,25 @@ def main(cell_id):
     w("```")
     w("")
 
-    s_r, s_e = recent["cat_share"].mean(), early["cat_share"].mean()
-    c_comp = mm["beta_comp"] * (np.log1p(s_r) - np.log1p(s_e))
-    w(f"**Category share** — coefficient × change in log(1+share):")
+    g_r, g_e = recent["org_sov"].mean(), early["org_sov"].mean()
+    c_org = mm["beta_orgsov"] * (np.log1p(g_r) - np.log1p(g_e))
+    w(f"**Organic search visibility** — coefficient × change in log(1+organic SOV):")
     w("```")
-    w(f"c_comp = {mm['beta_comp']:+.4f} × (ln(1+{s_r:.4f}) − ln(1+{s_e:.4f}))")
-    w(f"       = {mm['beta_comp']:+.4f} × ({np.log1p(s_r):.4f} − {np.log1p(s_e):.4f}) = {c_comp:+.5f}")
+    w(f"c_orgsov = {mm['beta_orgsov']:+.4f} × (ln(1+{g_r:.3f}) − ln(1+{g_e:.3f}))")
+    w(f"         = {mm['beta_orgsov']:+.4f} × ({np.log1p(g_r):.4f} − {np.log1p(g_e):.4f}) = {c_org:+.5f}")
     w("```")
     w("")
-    contrib = {"discount": c_disc, "osa": c_osa, "ad_sov": c_ad, "competitive": c_comp}
+    r_r, r_e = recent["rpi_w"].mean(), early["rpi_w"].mean()
+    c_comp = mm["beta_comp"] * (r_r - r_e)
+    w(f"**Competitor relative price (RPI)** — coefficient × change in the price ratio "
+      f"(MODEL v2: this replaced own category share, which was outcome-derived and circular):")
+    w("```")
+    w(f"c_comp = {mm['beta_comp']:+.4f} × (RPI_recent {r_r:.3f} − RPI_early {r_e:.3f})")
+    w(f"       = {mm['beta_comp']:+.4f} × ({r_r - r_e:+.3f}) = {c_comp:+.5f}")
+    w("```")
+    w("")
+    contrib = {"discount": c_disc, "osa": c_osa, "ad_sov": c_ad,
+               "organic_sov": c_org, "competitive": c_comp}
     top = max(contrib, key=lambda k: abs(contrib[k]))
     driver = top if abs(contrib[top]) >= 0.05 else "steady"
     w("**Scoreboard** (log-units; ±0.05 is the materiality bar `MATERIAL_CONTRIB`):")

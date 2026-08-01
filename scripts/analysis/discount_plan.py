@@ -76,7 +76,7 @@ def build_panel(fact_path):
     ft = ft[ft.get("is_regular_day", 1) == 1].copy()
     num = ["OFFTAKE_QTY", "discount_pct_actual", "selling_price", "stable_mrp",
            "WT_AVAILABILITY_PCT", "MONTHLY_AD_SOV", "MONTHLY_CAT_SHARE_MRP",
-           "MONTHLY_OVERALL_SOV"]
+           "MONTHLY_OVERALL_SOV", "MONTHLY_ORGANIC_SOV"]
     for c in num:
         ft[c] = pd.to_numeric(ft.get(c), errors="coerce")
     ft = ft.dropna(subset=["OFFTAKE_QTY", "selling_price", "cell_id", "DATE"])
@@ -92,6 +92,9 @@ def build_panel(fact_path):
     ft["u"]    = ft["OFFTAKE_QTY"].clip(lower=0)
     ft["u_sp"] = ft["u"] * ft["selling_price"]
     ft["u_d"]  = ft["u"] * ft["discount_pct_actual"]
+    # bridge for the competitor-price join: product -> RAW export category
+    pid_cat = (ft.groupby("PRODUCT_ID")["Category"].first().to_dict()
+               if "Category" in ft.columns else {})
 
     def agg(g):
         usum = g["u"].sum()
@@ -109,6 +112,7 @@ def build_panel(fact_path):
             "ad_sov":     g["MONTHLY_AD_SOV"].mean(),
             "cat_share":  g["MONTHLY_CAT_SHARE_MRP"].mean(),
             "ovr_sov":    g["MONTHLY_OVERALL_SOV"].mean(),
+            "org_sov":    g["MONTHLY_ORGANIC_SOV"].mean(),
             "n_days":     len(g),
         })
 
@@ -118,7 +122,11 @@ def build_panel(fact_path):
     # features
     p["log_osa"]   = np.log(p["osa"].clip(lower=1.0))
     p["log_adsov"] = np.log1p(p["ad_sov"].clip(lower=0))
-    p["comp_share"] = np.log1p(p["cat_share"].clip(lower=0))   # higher = we dominate
+    p["comp_share"] = np.log1p(p["cat_share"].clip(lower=0))   # kept for GATES only —
+    # own share is outcome-derived (this cell's units sit in its numerator), so it
+    # is NOT used in the regression any more (bad control: it stole discount credit)
+    p["log_orgsov"] = np.log1p(
+        pd.to_numeric(p["org_sov"], errors="coerce").clip(lower=0)).fillna(0.0)
     p["disc_sq"]   = p["disc"] ** 2                             # nonlinear (saturating) discount response
     # lagged sales — breaks reverse causality (discount deployed in REACTION to
     # last week's demand) and captures autocorrelation, lifting predictive R2.
@@ -135,7 +143,69 @@ def build_panel(fact_path):
     p.loc[(p["week"] - g["week"].shift(1)) != pd.Timedelta(days=7),  "lag1_lu"] = np.nan
     p.loc[(p["week"] - g["week"].shift(2)) != pd.Timedelta(days=14), "lag2_lu"] = np.nan
     p["is_weekend"] = 0
+
+    # ── competitor relative price index (exogenous replacement for own-share) ──
+    p["gram"] = p["cell_id"].astype(str).str.split("_").str[1].str.lower()
+    p["cat_raw"] = p["product_id"].map(pid_cat)
+    comp, _brands = _competitor_weekly()
+    if comp is not None:
+        p = p.merge(comp, left_on=["cat_raw", "gram", "city", "week"],
+                    right_on=["Category", "gram", "City", "week"], how="left")
+        p = p.drop(columns=[c for c in ("Category", "City") if c in p.columns])
+    else:
+        p["comp_price"] = np.nan
+    p["has_comp"] = p["comp_price"].notna()
+    p["rpi_w"] = (p["price"] / p["comp_price"]).clip(0.5, 2.0)
+    # gaps: fill with the cell's own median RPI, then neutral parity 1.0
+    p["rpi_w"] = p.groupby("cell_id")["rpi_w"].transform(lambda s: s.fillna(s.median()))
+    p["rpi_w"] = p["rpi_w"].fillna(1.0)
+    print(f"[plan] competitor RPI ({', '.join(_brands)}): "
+          f"{100.0 * p['has_comp'].mean():.0f}% of cell-weeks matched directly; "
+          f"gaps -> cell-median RPI, then parity 1.0")
     return p
+
+
+def _competitor_weekly():
+    """Weekly competitor price table straight from the RAW platform exports.
+
+    WHY: own category share is outcome-derived (this cell's units sit in its
+    numerator). Used as a regressor it acted as a bad control and stole credit
+    from the discount — removing it flipped verdicts. A competitor's price is
+    exogenous: it does not move because OUR units moved. Brands come from
+    COMPETITOR_BRANDS (config/settings.csv, max 3). Competitor volume is blank
+    in the export, so the MEDIAN selling price per (raw category, grammage,
+    city, week) is used."""
+    try:
+        import v4_config as _cfg
+        brands = list(getattr(_cfg, "COMPETITOR_BRANDS", ["Organic Tattva"]))[:3]
+        indir = getattr(_cfg, "SALES_DATA_DIR", os.path.join(ROOT, "input_data"))
+    except Exception:
+        brands, indir = ["Organic Tattva"], os.path.join(ROOT, "input_data")
+    frames = []
+    for f in sorted(glob.glob(os.path.join(indir, "*.csv"))):
+        try:
+            d = pd.read_csv(f, usecols=["Brand", "Category", "Grammage", "City",
+                                        "Date", "Selling Price"], low_memory=False)
+        except ValueError:
+            continue                      # not a platform export (e.g. MY SKU.csv)
+        d = d[d["Brand"].isin(brands)]
+        if len(d):
+            frames.append(d)
+    if not frames:
+        print(f"[plan] WARNING: no rows for competitor brand(s) {brands} in "
+              f"{indir} — rpi_w falls back to parity 1.0 everywhere")
+        return None, brands
+    c = pd.concat(frames, ignore_index=True)
+    c["Date"] = pd.to_datetime(c["Date"], errors="coerce")
+    c["Selling Price"] = pd.to_numeric(c["Selling Price"], errors="coerce")
+    c = c.dropna(subset=["Date", "Selling Price", "Category", "Grammage", "City"])
+    # export writes '1 kg' / '500 g'; our cell_ids use '1kg' / '500g'
+    c["gram"] = (c["Grammage"].astype(str)
+                 .str.replace(" ", "", regex=False).str.lower())
+    c["week"] = c["Date"].dt.to_period("W").dt.start_time
+    t = (c.groupby(["Category", "gram", "City", "week"])["Selling Price"]
+           .median().rename("comp_price").reset_index())
+    return t, brands
 
 
 # ── 2. confounder-controlled model, pooled per category ─────────────────────
@@ -143,7 +213,10 @@ def fit_models(panel):
     """One Huber-robust OLS per category: cell FE + isolated discount + controls."""
     months = sorted(panel["month"].unique())
     # lag1_lu+lag2_lu control reverse causality & autocorrelation; C(month) = seasonality
-    base = "np.log1p(units) ~ C(cell_id) + disc + disc_sq + log_osa + log_adsov + comp_share + lag1_lu + lag2_lu"
+    # MODEL v2: own comp_share REMOVED from the regressors (outcome-derived — a
+    # bad control that stole discount credit); replaced by the exogenous
+    # competitor relative price index rpi_w plus organic search visibility.
+    base = "np.log1p(units) ~ C(cell_id) + disc + disc_sq + log_osa + log_adsov + rpi_w + log_orgsov + lag1_lu + lag2_lu"
     formula = base + (" + C(month)" if len(months) > 1 else "")
 
     panel = panel.dropna(subset=["lag1_lu", "lag2_lu"]).copy()   # drop first 2 weeks per cell
@@ -182,7 +255,8 @@ def fit_models(panel):
             "beta_disc": beta_disc, "se_disc": se_disc, "beta_disc2": beta_disc2,
             "beta_osa": float(m.params.get("log_osa", np.nan)),
             "beta_adsov": float(m.params.get("log_adsov", np.nan)),
-            "beta_comp": float(m.params.get("comp_share", np.nan)),
+            "beta_comp": float(m.params.get("rpi_w", np.nan)),      # competitor RPI
+            "beta_orgsov": float(m.params.get("log_orgsov", np.nan)),
             "r2_full": r2_full, "r2_within": r2_within,
             "n_rows": len(sub), "n_cells": n_cells,
         }
@@ -274,12 +348,16 @@ def diagnose(panel, models):
         # attribution: contribution of each factor to the recent-vs-early log-units delta
         def dmean(col): return recent[col].mean() - early[col].mean()
         d_r, d_e = recent["disc"].mean(), early["disc"].mean()
-        contrib = {"discount": 0.0, "osa": 0.0, "ad_sov": 0.0, "competitive": 0.0}
+        contrib = {"discount": 0.0, "osa": 0.0, "ad_sov": 0.0,
+                   "organic_sov": 0.0, "competitive": 0.0}
         if mm.get("ok"):
             contrib["discount"]    = (beta*d_r + beta2*d_r*d_r) - (beta*d_e + beta2*d_e*d_e)
             contrib["osa"]         = mm["beta_osa"]        * (np.log(max(recent['osa'].mean(),1)) - np.log(max(early['osa'].mean(),1)))
             contrib["ad_sov"]      = mm["beta_adsov"]      * (np.log1p(recent['ad_sov'].mean()) - np.log1p(early['ad_sov'].mean()))
-            contrib["competitive"] = mm["beta_comp"]       * (np.log1p(recent['cat_share'].mean()) - np.log1p(early['cat_share'].mean()))
+            # MODEL v2: 'competitive' is now the COMPETITOR PRICE effect (rpi_w),
+            # not own share — own share is outcome-derived and was circular here.
+            contrib["organic_sov"] = mm["beta_orgsov"]     * (np.log1p(recent['org_sov'].mean()) - np.log1p(early['org_sov'].mean()))
+            contrib["competitive"] = mm["beta_comp"]       * (recent['rpi_w'].mean() - early['rpi_w'].mean())
             top = max(contrib, key=lambda k: abs(contrib[k]))
             # a factor only "drives" the cell if its contribution is MATERIAL
             # (>= MATERIAL_CONTRIB log-units). Otherwise the cell is "steady" —
@@ -334,6 +412,8 @@ def diagnose(panel, models):
             driver=driver, be_disc=round(be_disc,2), tgt_disc=round(tgt_disc,2),
             c_disc=round(contrib["discount"],3), c_osa=round(contrib["osa"],3),
             c_adsov=round(contrib["ad_sov"],3), c_comp=round(contrib["competitive"],3),
+            c_orgsov=round(contrib["organic_sov"],3),
+            rpi_w=round(float(recent["rpi_w"].mean()),3),
             tgt_units_wk=round(tgt_units,1),
             net_gain_mo=round(net_gain_mo,0), marginal_roas=round(roas,3) if np.isfinite(roas) else np.nan,
             disc_spend_mo=round(cur_units_wk*mrp*cur_disc/100.0*(30/7),0),
@@ -389,7 +469,8 @@ def _bucket(r):
     low_osa   = r["osa_mean"] < OSA_LOW
     osa_drag  = r["c_osa"]  < -MATERIAL_CONTRIB            # availability materially pulling sales down
     comp_drag = r["c_comp"] < -MATERIAL_CONTRIB            # competitive share materially pulling down
-    sov_drag  = r["c_adsov"] < -MATERIAL_CONTRIB
+    sov_drag  = (r["c_adsov"] < -MATERIAL_CONTRIB) or \
+                (r.get("c_orgsov", 0) < -MATERIAL_CONTRIB)   # paid OR organic visibility drag
     has_room  = r["cur_disc"] > r["tgt_disc"] + 0.5       # discount to trim within observed range
     # Availability / competition come first — never cut a cell a confounder drags.
     if low_osa or osa_drag:                               return "a_stock"

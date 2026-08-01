@@ -24,7 +24,9 @@ import importlib.util
 spec = importlib.util.spec_from_file_location("dp", os.path.join(ROOT, "scripts/analysis/discount_plan.py"))
 dp = importlib.util.module_from_spec(spec); spec.loader.exec_module(dp)
 
-XCOLS = ["log_osa", "log_adsov", "comp_share", "lag1_lu", "lag2_lu", "month"]
+# MODEL v2: own comp_share removed (outcome-derived bad control); replaced by
+# the exogenous competitor price index + organic visibility, mirroring the champion.
+XCOLS = ["log_osa", "log_adsov", "rpi_w", "log_orgsov", "lag1_lu", "lag2_lu", "month"]
 K = 5
 
 
