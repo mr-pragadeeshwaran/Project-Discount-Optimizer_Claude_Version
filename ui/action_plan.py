@@ -84,8 +84,12 @@ def build_action_plan(run):
             key, set_disc, gain, why = "hold_defend", cur, None, reason
         elif cid in rein_ids and bool(r.get("reliably_pays")):
             # candidates alone are directional; the SAME evidence bar as cuts
-            # applies — the whole CI must clear the pay-line (reliably_pays)
-            key, set_disc = "reinvest", (be if be > cur else cur)
+            # applies — the whole CI must clear the pay-line (reliably_pays).
+            # Target capped at the category-typical discount: a grid-edge
+            # break-even (e.g. 50%) is never an actionable depth.
+            cat_med = _num(r.get("cat_med_disc"), be)
+            tgt_up = min(be, cat_med) if cat_med > 0 else be
+            key, set_disc = "reinvest", (tgt_up if tgt_up > cur else cur)
             gain = None                                # all_cells net_gain ~0 here; value is volume growth
             why = (f"discount reliably lifts sales and sits ~{head:.0f}pp below its "
                    f"break-even level ({be:.0f}%) — room to invest more profitably")

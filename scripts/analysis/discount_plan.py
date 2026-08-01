@@ -154,11 +154,21 @@ def build_panel(fact_path):
         p = p.drop(columns=[c for c in ("Category", "City") if c in p.columns])
     else:
         p["comp_price"] = np.nan
+        p["comp_osa"] = np.nan
+        p["comp_adsov"] = np.nan
     p["has_comp"] = p["comp_price"].notna()
     p["rpi_w"] = (p["price"] / p["comp_price"]).clip(0.5, 2.0)
     # gaps: fill with the cell's own median RPI, then neutral parity 1.0
     p["rpi_w"] = p.groupby("cell_id")["rpi_w"].transform(lambda s: s.fillna(s.median()))
     p["rpi_w"] = p["rpi_w"].fillna(1.0)
+    # competitor availability & paid visibility (their stockout / ad burst moves
+    # OUR sales, and nothing about our sales causes theirs — exogenous)
+    p["log_comp_osa"] = np.log(pd.to_numeric(p["comp_osa"], errors="coerce").clip(lower=1.0))
+    p["log_comp_adsov"] = np.log1p(pd.to_numeric(p["comp_adsov"], errors="coerce").clip(lower=0))
+    for col in ("log_comp_osa", "log_comp_adsov"):
+        p[col] = p.groupby("cell_id")[col].transform(lambda s: s.fillna(s.median()))
+        med = p[col].median()
+        p[col] = p[col].fillna(0.0 if not np.isfinite(med) else med)
     print(f"[plan] competitor RPI ({', '.join(_brands)}): "
           f"{100.0 * p['has_comp'].mean():.0f}% of cell-weeks matched directly; "
           f"gaps -> cell-median RPI, then parity 1.0")
@@ -185,7 +195,8 @@ def _competitor_weekly():
     for f in sorted(glob.glob(os.path.join(indir, "*.csv"))):
         try:
             d = pd.read_csv(f, usecols=["Brand", "Category", "Grammage", "City",
-                                        "Date", "Selling Price"], low_memory=False)
+                                        "Date", "Selling Price", "Wt. OSA %",
+                                        "Ad SOV"], low_memory=False)
         except ValueError:
             continue                      # not a platform export (e.g. MY SKU.csv)
         d = d[d["Brand"].isin(brands)]
@@ -197,14 +208,17 @@ def _competitor_weekly():
         return None, brands
     c = pd.concat(frames, ignore_index=True)
     c["Date"] = pd.to_datetime(c["Date"], errors="coerce")
-    c["Selling Price"] = pd.to_numeric(c["Selling Price"], errors="coerce")
+    for col in ("Selling Price", "Wt. OSA %", "Ad SOV"):
+        c[col] = pd.to_numeric(c.get(col), errors="coerce")
     c = c.dropna(subset=["Date", "Selling Price", "Category", "Grammage", "City"])
     # export writes '1 kg' / '500 g'; our cell_ids use '1kg' / '500g'
     c["gram"] = (c["Grammage"].astype(str)
                  .str.replace(" ", "", regex=False).str.lower())
     c["week"] = c["Date"].dt.to_period("W").dt.start_time
-    t = (c.groupby(["Category", "gram", "City", "week"])["Selling Price"]
-           .median().rename("comp_price").reset_index())
+    t = (c.groupby(["Category", "gram", "City", "week"])
+           .agg(comp_price=("Selling Price", "median"),
+                comp_osa=("Wt. OSA %", "mean"),
+                comp_adsov=("Ad SOV", "mean")).reset_index())
     return t, brands
 
 
@@ -216,7 +230,8 @@ def fit_models(panel):
     # MODEL v2: own comp_share REMOVED from the regressors (outcome-derived — a
     # bad control that stole discount credit); replaced by the exogenous
     # competitor relative price index rpi_w plus organic search visibility.
-    base = "np.log1p(units) ~ C(cell_id) + disc + disc_sq + log_osa + log_adsov + rpi_w + log_orgsov + lag1_lu + lag2_lu"
+    base = ("np.log1p(units) ~ C(cell_id) + disc + disc_sq + log_osa + log_adsov"
+            " + rpi_w + log_comp_osa + log_comp_adsov + log_orgsov + lag1_lu + lag2_lu")
     formula = base + (" + C(month)" if len(months) > 1 else "")
 
     panel = panel.dropna(subset=["lag1_lu", "lag2_lu"]).copy()   # drop first 2 weeks per cell
@@ -257,6 +272,8 @@ def fit_models(panel):
             "beta_adsov": float(m.params.get("log_adsov", np.nan)),
             "beta_comp": float(m.params.get("rpi_w", np.nan)),      # competitor RPI
             "beta_orgsov": float(m.params.get("log_orgsov", np.nan)),
+            "beta_comp_osa": float(m.params.get("log_comp_osa", np.nan)),
+            "beta_comp_adsov": float(m.params.get("log_comp_adsov", np.nan)),
             "r2_full": r2_full, "r2_within": r2_within,
             "n_rows": len(sub), "n_cells": n_cells,
         }
@@ -348,8 +365,8 @@ def diagnose(panel, models):
         # attribution: contribution of each factor to the recent-vs-early log-units delta
         def dmean(col): return recent[col].mean() - early[col].mean()
         d_r, d_e = recent["disc"].mean(), early["disc"].mean()
-        contrib = {"discount": 0.0, "osa": 0.0, "ad_sov": 0.0,
-                   "organic_sov": 0.0, "competitive": 0.0}
+        contrib = {"discount": 0.0, "osa": 0.0, "ad_sov": 0.0, "organic_sov": 0.0,
+                   "competitive": 0.0, "comp_osa": 0.0, "comp_adsov": 0.0}
         if mm.get("ok"):
             contrib["discount"]    = (beta*d_r + beta2*d_r*d_r) - (beta*d_e + beta2*d_e*d_e)
             contrib["osa"]         = mm["beta_osa"]        * (np.log(max(recent['osa'].mean(),1)) - np.log(max(early['osa'].mean(),1)))
@@ -358,6 +375,10 @@ def diagnose(panel, models):
             # not own share — own share is outcome-derived and was circular here.
             contrib["organic_sov"] = mm["beta_orgsov"]     * (np.log1p(recent['org_sov'].mean()) - np.log1p(early['org_sov'].mean()))
             contrib["competitive"] = mm["beta_comp"]       * (recent['rpi_w'].mean() - early['rpi_w'].mean())
+            # v2.1: the competitor's own operations — their stockout or ad burst
+            # moves OUR sales; nothing about our sales causes theirs.
+            contrib["comp_osa"]    = mm["beta_comp_osa"]   * (recent['log_comp_osa'].mean() - early['log_comp_osa'].mean())
+            contrib["comp_adsov"]  = mm["beta_comp_adsov"] * (recent['log_comp_adsov'].mean() - early['log_comp_adsov'].mean())
             top = max(contrib, key=lambda k: abs(contrib[k]))
             # a factor only "drives" the cell if its contribution is MATERIAL
             # (>= MATERIAL_CONTRIB log-units). Otherwise the cell is "steady" —
@@ -413,6 +434,8 @@ def diagnose(panel, models):
             c_disc=round(contrib["discount"],3), c_osa=round(contrib["osa"],3),
             c_adsov=round(contrib["ad_sov"],3), c_comp=round(contrib["competitive"],3),
             c_orgsov=round(contrib["organic_sov"],3),
+            c_comp_osa=round(contrib["comp_osa"],3),
+            c_comp_adsov=round(contrib["comp_adsov"],3),
             rpi_w=round(float(recent["rpi_w"].mean()),3),
             tgt_units_wk=round(tgt_units,1),
             net_gain_mo=round(net_gain_mo,0), marginal_roas=round(roas,3) if np.isfinite(roas) else np.nan,

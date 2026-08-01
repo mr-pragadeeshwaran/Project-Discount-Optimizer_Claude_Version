@@ -152,6 +152,8 @@ def main(cell_id):
         w(f"| `log_adsov` | {mm['beta_adsov']:+.4f} | paid ad visibility effect |")
         w(f"| `log_orgsov` | {mm['beta_orgsov']:+.4f} | organic search visibility effect |")
         w(f"| `rpi_w` | {mm['beta_comp']:+.4f} | competitor relative price — our price ÷ competitor's (MODEL v2: replaced own share, which was outcome-derived) |")
+        w(f"| `log_comp_osa` | {mm['beta_comp_osa']:+.4f} | COMPETITOR availability — their stockout should LIFT us (expect negative) |")
+        w(f"| `log_comp_adsov` | {mm['beta_comp_adsov']:+.4f} | COMPETITOR ad visibility — their ad burst should HURT us (expect negative) |")
         w(f"| se(β) | {mm['se_disc']:.5f} | the uncertainty around β |")
         w(f"| R² (full) | {mm['r2_full']:.3f} | must clear the 0.60 floor → "
           f"{'PASSES' if mm['r2_full']>=0.60 else 'FAILS'} |")
@@ -224,8 +226,23 @@ def main(cell_id):
     w(f"       = {mm['beta_comp']:+.4f} × ({r_r - r_e:+.3f}) = {c_comp:+.5f}")
     w("```")
     w("")
+    ko_r, ko_e = recent["log_comp_osa"].mean(), early["log_comp_osa"].mean()
+    c_kosa = mm["beta_comp_osa"] * (ko_r - ko_e)
+    w(f"**Competitor availability** — their stockout is our opportunity (v2.1):")
+    w("```")
+    w(f"c_comp_osa = {mm['beta_comp_osa']:+.4f} × (log comp OSA: recent {ko_r:.4f} − early {ko_e:.4f}) = {c_kosa:+.5f}")
+    w("```")
+    w("")
+    ka_r, ka_e = recent["log_comp_adsov"].mean(), early["log_comp_adsov"].mean()
+    c_kad = mm["beta_comp_adsov"] * (ka_r - ka_e)
+    w(f"**Competitor ad visibility** — their ad burst pulls shoppers away (v2.1):")
+    w("```")
+    w(f"c_comp_adsov = {mm['beta_comp_adsov']:+.4f} × (log1p comp adSOV: recent {ka_r:.4f} − early {ka_e:.4f}) = {c_kad:+.5f}")
+    w("```")
+    w("")
     contrib = {"discount": c_disc, "osa": c_osa, "ad_sov": c_ad,
-               "organic_sov": c_org, "competitive": c_comp}
+               "organic_sov": c_org, "competitive": c_comp,
+               "comp_osa": c_kosa, "comp_adsov": c_kad}
     top = max(contrib, key=lambda k: abs(contrib[k]))
     driver = top if abs(contrib[top]) >= 0.05 else "steady"
     w("**Scoreboard** (log-units; ±0.05 is the materiality bar `MATERIAL_CONTRIB`):")

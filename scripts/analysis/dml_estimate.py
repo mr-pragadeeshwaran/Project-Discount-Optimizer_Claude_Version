@@ -26,7 +26,8 @@ dp = importlib.util.module_from_spec(spec); spec.loader.exec_module(dp)
 
 # MODEL v2: own comp_share removed (outcome-derived bad control); replaced by
 # the exogenous competitor price index + organic visibility, mirroring the champion.
-XCOLS = ["log_osa", "log_adsov", "rpi_w", "log_orgsov", "lag1_lu", "lag2_lu", "month"]
+XCOLS = ["log_osa", "log_adsov", "rpi_w", "log_comp_osa", "log_comp_adsov",
+         "log_orgsov", "lag1_lu", "lag2_lu", "month"]
 K = 5
 
 
