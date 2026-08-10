@@ -1,4 +1,4 @@
-# OPERATIONS MANUAL — Discount Optimization System, End to End
+# OPERATIONS MANUAL — Stat IQ Lab Discount Optimization System, End to End
 **Architecture · Execution · Weekly Ops · Learning Loop · Troubleshooting**
 Version: 7 July 2026, written against git HEAD (`6fd3f1e`). Every path and command below refers to actual files in this repo.
 

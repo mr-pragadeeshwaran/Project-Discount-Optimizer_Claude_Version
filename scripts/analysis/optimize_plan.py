@@ -20,12 +20,22 @@ import pandas as pd
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, ROOT)
+import v4_config as cfg   # brand identity comes from config, never hardcoded
 import importlib.util
 spec = importlib.util.spec_from_file_location("dp", os.path.join(ROOT, "scripts/analysis/discount_plan.py"))
 dp = importlib.util.module_from_spec(spec); spec.loader.exec_module(dp)
 
 TARGET = 500_000
 MONTH = 30.0 / 7.0
+
+
+def _strip_brand(title):
+    """Drop the own-brand prefix from a product title (patterns from config)."""
+    t = str(title)
+    pats = getattr(cfg, "OWN_BRAND_PATTERNS", None) or [cfg.BRAND_NAME]
+    for p in sorted(pats, key=len, reverse=True):
+        t = t.replace(p + " ", "")
+    return t
 
 
 def main():
@@ -113,7 +123,7 @@ def main():
           f"({'≥' if confident_all+unlock>=TARGET else '<'} target, but unlock is unconfirmed)")
     print("\n  top REINVEST (scale up where discount reliably pays):")
     for _, x in rein.nlargest(6, "delta_nr_mo").iterrows():
-        print(f"    {x['title'].replace('24 Mantra Organic ','')[:26]:26s} {x['city'][:10]:10s} "
+        print(f"    {_strip_brand(x['title'])[:26]:26s} {x['city'][:10]:10s} "
               f"{x['cur_disc']:.0f}%→{x['opt_disc']:.0f}% (cap {x['cap_disc']:.0f}%)  +₹{x['delta_nr_mo']:,.0f}/mo")
     return dict(confident_all=confident_all, confident_hi=confident_hi, unlock=unlock, target=TARGET)
 

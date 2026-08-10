@@ -4,7 +4,7 @@
 
 ## Who this is for & how to read it
 
-This handbook is written for exactly one reader: a business owner who runs a real, money-making software system — the 24 Mantra discount optimizer on this machine — builds with AI rather than writing code by hand, and wants to graduate from "I own this system" to "I can design the next one." It assumes strong business judgment and **zero** software-engineering background. Every technical term is explained in plain language, with an everyday analogy, the first time it appears — no exceptions. If you already know a term, skim the two sentences and move on; if you don't, those two sentences are the whole price of admission.
+This handbook is written for exactly one reader: a business owner who runs a real, money-making software system — the Stat IQ Lab discount optimizer on this machine — builds with AI rather than writing code by hand, and wants to graduate from "I own this system" to "I can design the next one." It assumes strong business judgment and **zero** software-engineering background. Every technical term is explained in plain language, with an everyday analogy, the first time it appears — no exceptions. If you already know a term, skim the two sentences and move on; if you don't, those two sentences are the whole price of admission.
 
 Every major component in this book is explained three times, at three altitudes. You'll see these labels throughout:
 
@@ -2240,4 +2240,4 @@ Every important term this handbook defines, one line each. The section where it 
 
 ---
 
-*Generated 2026-07-12 for the 24 Mantra Organic discount optimizer. Every technical claim in this handbook was checked against the live repository by an independent reviewer before assembly; the architecture described is the one actually running, not an idealized one. Honest limits: this book teaches the software architecture — the statistics live in `COMPLETE_SYSTEM_GUIDE.md`, the run commands in `EXECUTION_PLAYBOOK.md`, and the paper-parity evidence in `PEPSICO_PARITY_REPORT.md`.*
+*Generated 2026-07-12 for the Stat IQ Lab discount optimizer (24 Mantra Organic engagement). Every technical claim in this handbook was checked against the live repository by an independent reviewer before assembly; the architecture described is the one actually running, not an idealized one. Honest limits: this book teaches the software architecture — the statistics live in `COMPLETE_SYSTEM_GUIDE.md`, the run commands in `EXECUTION_PLAYBOOK.md`, and the paper-parity evidence in `PEPSICO_PARITY_REPORT.md`.*

@@ -28,6 +28,8 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 import pandas as pd
 import os
 
+import v4_config as cfg   # brand/platform identity comes from config, never hardcoded
+
 
 # ────────────────────────────────────────────────────────────────────
 # Design tokens
@@ -270,7 +272,7 @@ def _build_summary_sheet(ws, summary, df):
          pd.Timestamp.now().strftime("%d %B %Y"),
          font=f(9, color=MUTED), align=al("left"))
     cell(3, 1, "Portfolio Summary", font=f(20, bold=True, color=INK))
-    cell(4, 1, "24 Mantra Organic on Blinkit", font=f(10, color=BODY))
+    cell(4, 1, f"{cfg.BRAND_NAME} on {cfg.PLATFORM_NAME}", font=f(10, color=BODY))
 
     # ── Portfolio metrics table — formulas reference Data sheet ────────
     # Row 7 = header, rows 8-12 = metrics
@@ -1215,7 +1217,7 @@ def _build_detail_sheet(ws, df, sheet_type):
         eyebrow = "DISCOUNT OPTIMISATION  ·  PRICE LIFTS"
         desc = ("Cells sorted by Rs. wasted per month. "
                 "Now is the current selling price. "
-                "This Week is what to set on Blinkit this Monday — capped at a 3 ppt move "
+                f"This Week is what to set on {cfg.PLATFORM_NAME} this Monday — capped at a 3 ppt move "
                 "per cycle. Wasted/mo is the full multi-cycle savings opportunity if you "
                 "walked the price all the way back to MRP.")
         cols = [

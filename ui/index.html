@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Optimal Price Finder</title>
+<title>Stat IQ Lab — Optimal Price Finder</title>
 <script>
 /* theme boot — runs before first paint so there is no flash */
 (function(){
@@ -689,8 +689,8 @@ td.num,th.num{text-align:right}
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
       </span>
       <span class="wm-txt">
-        <div class="wm-name">Optimal Price Finder</div>
-        <div class="wm-tag">24 Mantra Organic &middot; Blinkit</div>
+        <div class="wm-name">Stat IQ Lab</div>
+        <div class="wm-tag">Optimal Price Finder</div>
       </span>
     </div>
     <nav id="nav">
@@ -1809,7 +1809,7 @@ async function renderCutPlan() {
 function renderWeeklyFlow() {
   const steps = [
     ['1', 'Recommend', 'The tool picks this week’s glide-step cuts under all the caps.'],
-    ['2', 'KAM applies', 'Your key-account manager applies them on Blinkit and marks Y/N.'],
+    ['2', 'KAM applies', 'Your key-account manager applies them on the platform and marks Y/N.'],
     ['3', 'Score', 'Next week: predicted vs actual, cell by cell, on the scorecard.'],
     ['4', 'Kill-switch watches', 'Any cell that underperforms is auto-paused. No heroics.'],
   ];
@@ -2011,7 +2011,7 @@ function renderInputs() {
     ? '<div class="tblwrap" style="max-height:320px"><table><thead><tr><th>Data file</th><th class="num">Size (MB)</th><th>Last updated</th></tr></thead><tbody>' +
       fl.map(f => '<tr><td>' + esc(f.name) + '</td><td class="num">' + fmtIN(f.mb) + '</td><td>' + esc(f.modified) + '</td></tr>').join('') +
       '</tbody></table></div>'
-    : '<div class="empty"><div class="et">No data files yet</div><div class="es">Drop the Blinkit export CSVs into <b>input_data/</b>, then run step 1 — Build foundation.</div></div>';
+    : '<div class="empty"><div class="et">No data files yet</div><div class="es">Drop the platform export CSVs into <b>input_data/</b>, then run step 1 — Build foundation.</div></div>';
 
   renderSettings();
 }

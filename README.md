@@ -1,11 +1,14 @@
-# Optimal Price Finder — Discount Optimisation for Quick-Commerce
+# Stat IQ Lab — Optimal Price Finder
 
-Turns a CPG brand's raw sales export into an honest, week-by-week discount plan:
-**which discounts are wasted, which actually drive sales, how much you can safely
-save, and proof — on your own register — that the calls were right.**
+Discount optimisation for quick-commerce. Turns a CPG brand's raw sales export
+into an honest, week-by-week discount plan: **which discounts are wasted, which
+actually drive sales, how much you can safely save, and proof — on your own
+register — that the calls were right.**
 
-Currently configured for **24 Mantra Organic on Blinkit** (6 months, ~84 products
-× 11 cities). Designed to generalise to any brand × platform with daily sales data.
+Brand-agnostic by design: the client brand, platform and every knob live in
+`config/settings.csv` (edited from the dashboard's Inputs & Settings page),
+never in code. Current engagement: **24 Mantra Organic on Blinkit** (6 months,
+~84 products × 11 cities). Works for any brand × platform with daily sales data.
 
 ---
 

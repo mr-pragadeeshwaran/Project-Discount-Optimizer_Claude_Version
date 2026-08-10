@@ -157,7 +157,7 @@ def apply_guardrails_and_tier(economics_df: pd.DataFrame) -> pd.DataFrame:
                                       ((_tu * _tp - _cur_nr) / _cur_nr * 100), 0).round(1)
     # Honest headline "savings" = the net-revenue gain (was discount-spend saved).
     df["rec_monthly_savings"] = df["net_rev_gain_mo"]
-    # Price-led summary (what customers actually see on Blinkit)
+    # Price-led summary (what customers actually see on the platform)
     df["price_change_inr"] = (df["rec_price"] - df["current_price"]).round(1)
     df["price_change_pct"] = np.where(
         df["current_price"] > 0,

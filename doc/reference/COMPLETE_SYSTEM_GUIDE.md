@@ -1,4 +1,4 @@
-# Complete System Guide — 24 Mantra Organic Discount & Pricing Optimizer
+# Complete System Guide — Stat IQ Lab Discount & Pricing Optimizer
 
 ## What this tool does (30-second version)
 
@@ -94,7 +94,7 @@ The tool doesn't care that the raw column headers are Blinkit's wording. `v4_con
 | `Wt. PPU` | `WT_AVG_PPU_X100` | Weighted average price per unit |
 | `Competitor Price` | `Competitor Price` | Rival's price (used only for competitive positioning; **optional** — RCA exports don't have it, and the tool fills it with blanks and carries on) |
 
-Two things worth knowing: the tool reads these giant CSVs **in 200,000-row chunks** so it never chokes on memory, and it throws away every non-24-Mantra row *as it reads each chunk*, so only your own brand's data ever enters the pipeline. If a required column is genuinely missing, it stops immediately with a plain-English error rather than crashing deep inside the math later.
+Two things worth knowing: the tool reads these giant CSVs **in 200,000-row chunks** so it never chokes on memory, and it throws away every row that isn't your configured brand (`BRAND_NAME`) *as it reads each chunk*, so only your own brand's data ever enters the pipeline. If a required column is genuinely missing, it stops immediately with a plain-English error rather than crashing deep inside the math later.
 
 #### The central idea: the "cell"
 

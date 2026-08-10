@@ -1,7 +1,7 @@
 """
 elasticity_hier.py — Hierarchical own-price elasticity by PENALIZED (partial-pooled)
 regression. The Bayesian-hierarchical stand-in for the PepsiCo PricingAI adapted to
-a single brand (24 Mantra Organic) on Blinkit, with NO PyMC/STAN and NO Gurobi/cloud.
+a single configured brand on quick-commerce, with NO PyMC/STAN and NO Gurobi/cloud.
 
 WHY penalized regression instead of a real Bayesian sampler
 -----------------------------------------------------------
@@ -549,7 +549,7 @@ def _synth_panel(seed=0):
                     rows.append({
                         "product_id": pid, "city": city, "category": cat,
                         "base_product": base, "pack_grams": grams,
-                        "title": f"24 Mantra Organic {base} {int(grams)}g",
+                        "title": f"Demo Brand {base} {int(grams)}g",
                         "week": wk, "month": pd.Timestamp(wk).month,
                         "units": float(units), "price": round(price[pid], 2),
                         "mrp": mrp, "disc": round(disc[pid], 2),

@@ -1,5 +1,5 @@
 """
-de_optimizer.py — PricingAI differential-evolution price optimizer, adapted to Blinkit.
+de_optimizer.py — PricingAI differential-evolution price optimizer for quick-commerce.
 
 WHAT THIS IS (business framing):
   This is the "decide the discount" engine. Given how each product's sales respond to price
@@ -824,7 +824,7 @@ def optimize(elast_df, cross_df, baseline_df, config):
 if __name__ == "__main__":
     import sys
 
-    # Two base products x one city. 24 Mantra-style: Sonamasuri Rice 1kg & 5kg (a ladder pair),
+    # Two base products x one city. CPG-style: Sonamasuri Rice 1kg & 5kg (a ladder pair),
     # plus Toor Dal 1kg (a substitute cross pair with Rice 1kg).
     baseline_df = pd.DataFrame(
         [

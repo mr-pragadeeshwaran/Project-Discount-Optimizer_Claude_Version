@@ -1,5 +1,5 @@
 """
-app.py — local dashboard backend (v2) for the Discount & Pricing Optimizer.
+app.py — local dashboard backend (v2) for Stat IQ Lab — Optimal Price Finder.
 
 Zero-dependency (stdlib + pandas, both already installed) web server so the owner can
 SEE the system instead of running terminal commands:
@@ -666,7 +666,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"[ui] Discount Optimizer dashboard -> http://localhost:{PORT}  (Ctrl+C to stop)")
+    print(f"[ui] Stat IQ Lab dashboard -> http://localhost:{PORT}  (Ctrl+C to stop)")
     srv.serve_forever()
 
 

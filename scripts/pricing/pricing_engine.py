@@ -1,5 +1,6 @@
 """
-pricing_engine.py — PricingAI orchestrator (adapted to 24 Mantra on Blinkit).
+pricing_engine.py — PricingAI orchestrator (single configured brand on
+quick-commerce; BRAND_NAME / PLATFORM_NAME in v4_config).
 
 Chains the four modules:
   pricing_panel.build_pricing_panel   -> weekly panel (regular price, promo flags, pack grams)

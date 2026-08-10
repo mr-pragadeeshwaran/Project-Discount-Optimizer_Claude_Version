@@ -744,6 +744,12 @@ def _resolve_calendar(season_info: dict):
 # Sheet 5 — How to use
 # --------------------------------------------------------------------------- #
 def _build_how_to_use(ws, week_label: str):
+    # Platform name comes from config so the copy fits any client engagement.
+    try:
+        import v4_config as _cfg
+        _platform = getattr(_cfg, "PLATFORM_NAME", "the platform")
+    except ImportError:
+        _platform = "the platform"
     ws.cell(row=1, column=1, value="How to use this workbook").font = TITLE_FONT
     ws.cell(
         row=2, column=1,
@@ -764,7 +770,7 @@ def _build_how_to_use(ws, week_label: str):
          "'Action' says what to do. 'Reason' says why in one line. 'Confidence' "
          "tells you how sure the tool is: High = act now, Experimental = try small, "
          "Low = watch only."),
-        ("4. Apply the 'This-Week Disc%' in Blinkit",
+        ("4. Apply the 'This-Week Disc%' in " + _platform,
          "Set each cell's discount to the 'This-Week Disc%' value. The "
          "'This-Week Price' is what the shopper will see. Only change what the "
          "plan tells you to."),

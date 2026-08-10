@@ -11,6 +11,17 @@ import numpy as np
 import pandas as pd
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, ROOT)
+import v4_config as cfg   # brand/platform identity comes from config, never hardcoded
+
+
+def _strip_brand(title):
+    """Drop the own-brand prefix from a product title (patterns from config)."""
+    t = str(title)
+    pats = getattr(cfg, "OWN_BRAND_PATTERNS", None) or [cfg.BRAND_NAME]
+    for p in sorted(pats, key=len, reverse=True):
+        t = t.replace(p + " ", "")
+    return t
 
 
 def _run():
@@ -49,7 +60,7 @@ def main():
 
     # ── PLAN.md ──
     L = []
-    L.append(f"# Confounder-Controlled Discount Plan — 24 Mantra Organic (Blinkit)\n")
+    L.append(f"# Confounder-Controlled Discount Plan — {cfg.BRAND_NAME} ({cfg.PLATFORM_NAME})\n")
     L.append(f"*Run `{S['run']}` · {S['n_products']} products × {df['city'].nunique()} cities "
              f"= {S['n_cells']} cells · {S['weeks']} weeks (6 months) · validated C1–C6 PASS*\n")
 
@@ -104,7 +115,7 @@ def main():
     L.append("| Conf | Product | City | Disc→Target | OSA | Save/mo | Why (isolated attribution) |")
     L.append("|---|---|---|---|---:|---:|---|")
     for _, x in cut.sort_values("net_gain_mo", ascending=False).head(18).iterrows():
-        prod = x["title"].replace("24 Mantra Organic ", "")[:24]
+        prod = _strip_brand(x["title"])[:24]
         L.append(f"| {x['confidence'][:4]} | {prod} | {x['city']} | {x['cur_disc']:.0f}%→{x['tgt_disc']:.0f}% | "
                  f"{x['osa_mean']:.0f}% | {rupee(x['net_gain_mo'])} | {x['decision_reason'][:70]} |")
     L.append("")

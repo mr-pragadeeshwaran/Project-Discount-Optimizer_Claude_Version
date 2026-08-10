@@ -87,7 +87,7 @@ def prepare_fact_table(raw_df: pd.DataFrame, calendar_df: pd.DataFrame,
 
     # ── 4. Compute SELLING PRICE — the consumer-facing price ─────────
     # selling_price = stable_mrp × (1 − discount/100)
-    # This is the definitive price the consumer sees on Blinkit.
+    # This is the definitive price the consumer sees on the platform.
     # Using stable_mrp (not raw daily MRP) ensures this is clean and consistent.
     df["selling_price"] = (df["stable_mrp"] * (1 - df["discount_pct_actual"] / 100)).round(2)
     df["selling_price"] = df["selling_price"].clip(lower=1.0)  # floor at ₹1

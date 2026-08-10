@@ -1,9 +1,12 @@
 """
-v4_config.py — Central configuration for the 8-Stage Pricing Optimization System.
+v4_config.py — Central configuration for Stat IQ Lab's 8-Stage Pricing
+Optimization System.
 
-Designed for 24 Mantra Organic SKUs across 11 cities on Blinkit.
-Competitor brands are excluded from modeling; their pricing is captured
-via the Competitor Price column for competitive positioning features.
+Brand-agnostic by design: the client brand and platform are settings
+(BRAND_NAME / PLATFORM_NAME below — current engagement: 24 Mantra Organic on
+Blinkit), not facts baked into code. Competitor brands are excluded from
+modeling; their pricing is captured via the Competitor Price column for
+competitive positioning features.
 
 EVERY VALUE BELOW IS A DEFAULT. Drop a settings file in config/ and it wins:
 

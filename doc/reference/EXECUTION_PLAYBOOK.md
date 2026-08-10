@@ -1,7 +1,7 @@
 # Execution Playbook — Discount & Pricing Optimizer
 ### How to run the system, end to end, with the exact commands, cadences, controls, and decision rules
 
-*Prepared as the operating manual for the 24 Mantra Organic (Blinkit) deployment. Every command below is copy-pasteable and matches the code in this repository. Read the Executive Summary first; run from Section 2; keep Appendix A open while you work.*
+*Prepared as the operating manual for Stat IQ Lab's 24 Mantra Organic (Blinkit) deployment. Every command below is copy-pasteable and matches the code in this repository. Read the Executive Summary first; run from Section 2; keep Appendix A open while you work.*
 
 ---
 

@@ -11,6 +11,7 @@ for the rupee sign, arrows, checkmarks or Greek letters — so this document use
 "Rs.", drawn arrow shapes, "phi"/"kappa" spelled out, etc. Do not "fix" that.
 """
 import os
+import sys
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
 from reportlab.lib.colors import HexColor, white
@@ -21,6 +22,8 @@ from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, PageBreak,
 from reportlab.graphics.shapes import Drawing, Rect, String, Line, Polygon
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, ROOT)
+import v4_config as cfg   # platform identity comes from config, never hardcoded
 OUT = os.path.join(ROOT, "doc", "pdf", "DISCOUNT_OPTIMIZER_SYSTEM_GUIDE.pdf")
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 
@@ -203,7 +206,7 @@ def build():
         el.append(Paragraph(p, _st("cv", fontSize=10.5, leading=18,
                                    textColor=INK, alignment=TA_CENTER)))
     el.append(Spacer(1, 60))
-    el.append(Paragraph("Reference deployment: 4 SKUs x 11 cities on Blinkit  |  "
+    el.append(Paragraph(f"Reference deployment: 4 SKUs x 11 cities on {cfg.PLATFORM_NAME}  |  "
                         "regenerate: scripts/generate_system_guide.py", NOTE))
     el.append(PageBreak())
 

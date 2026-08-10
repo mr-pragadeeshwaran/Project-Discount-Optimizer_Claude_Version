@@ -114,8 +114,11 @@ def build_plan_df(csv_path):
     try:
         import v4_config as _cfg
         strategic = {_pid_key(s) for s in (getattr(_cfg, "STRATEGIC_SKUS", []) or [])}
+        brand_pats = sorted(getattr(_cfg, "OWN_BRAND_PATTERNS", None)
+                            or [getattr(_cfg, "BRAND_NAME", "")], key=len, reverse=True)
     except ImportError:
         strategic = set()
+        brand_pats = []
     # Match on the normalized key: the plan's product_id is int64, the configured
     # heroes are strings — a raw isin() would silently protect nothing.
     is_hero = d["product_id"].map(_pid_key).isin(strategic)
@@ -124,13 +127,19 @@ def build_plan_df(csv_path):
         print(f"[tracker] HERO SHIELD — {len(strategic)} strategic SKU(s) configured; "
               f"{n_shield} waste-cut cell(s) held.")
     is_cut = (d["bucket"] == "c_waste_cut") & (~is_hero)
+    # Display titles without the own-brand prefix (patterns from config — works
+    # for any client brand, not just the current engagement).
+    titles = d["title"].astype(str)
+    for _bp in brand_pats:
+        if _bp:
+            titles = titles.str.replace(_bp + " ", "", regex=False)
     suggested = cur_disc.copy()
     suggested[is_cut] = d.loc[is_cut, "tgt_disc"].astype(float)
     pred_units = d["cur_units_wk"].astype(float).copy()
     pred_units[is_cut] = d.loc[is_cut, "tgt_units_wk"].astype(float)
     p = pd.DataFrame({
         "cell_id": d["cell_id"], "product_id": d["product_id"], "city": d["city"],
-        "category": d["category"], "title": d["title"].astype(str).str.replace("24 Mantra Organic ", "", regex=False),
+        "category": d["category"], "title": titles,
         "mrp": d["mrp"].astype(float),
         "cur_price": d["cur_price"].astype(float), "cur_disc": cur_disc,
         "cur_units_wk": d["cur_units_wk"].astype(float),

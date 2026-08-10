@@ -51,7 +51,7 @@ def engineer_features(fact_df: pd.DataFrame) -> pd.DataFrame:
 
     # ── Primary price signal: log(selling_price) ─────────────────────
     # selling_price = stable_mrp × (1 - discount/100) — computed in Stage 2
-    # This is the actual rupee price the consumer sees on Blinkit.
+    # This is the actual rupee price the consumer sees on the platform.
     # log transform makes the coefficient a standard price elasticity.
     if "selling_price" not in df.columns:
         # Fallback: reconstruct from discount_pct_actual
@@ -62,7 +62,7 @@ def engineer_features(fact_df: pd.DataFrame) -> pd.DataFrame:
     df["log_price"] = np.log(df["selling_price"].clip(lower=1.0))
 
     # ── Badge signal: discount_pct ────────────────────────────────────
-    # Blinkit shows a red badge "X% OFF" — this is a separate psychological
+    # The platform shows a red badge "X% OFF" — this is a separate psychological
     # trigger from the price level itself. Holding price constant, a bigger
     # badge number may lift conversions (deal-seeker behaviour).
     df["discount_pct"] = df["discount_pct_actual"].clip(lower=0, upper=70)

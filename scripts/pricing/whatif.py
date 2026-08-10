@@ -1,5 +1,5 @@
 """
-scripts/pricing/whatif.py  —  Adjusted-Scenario (what-if) engine for Blinkit PricingAI.
+scripts/pricing/whatif.py  —  Adjusted-Scenario (what-if) engine for the PricingAI stack.
 
 WHAT THIS IS (business framing)
 -------------------------------
@@ -8,7 +8,7 @@ WHOLE portfolio move: that SKU sells more (own-price effect), but its category
 siblings sell a little less (cannibalization / cross-price effect). No optimizer
 runs — this is pure algebra, so it returns in microseconds. It is the
 `/simulate` endpoint of the PepsiCo PricingAI blueprint, adapted to a single
-brand (24 Mantra Organic) on Blinkit.
+configured brand on quick-commerce (BRAND_NAME / PLATFORM_NAME in v4_config).
 
 WHERE IT SITS
 -------------

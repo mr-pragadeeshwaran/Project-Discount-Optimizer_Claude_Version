@@ -300,7 +300,7 @@ def generate_dashboard(rec_df: pd.DataFrame, output_dir: str, context: dict) -> 
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Brand Team Pricing Dashboard</title>
+    <title>Stat IQ Lab — Brand Team Pricing Dashboard</title>
     <style>
         body {{ font-family: 'Inter', -apple-system, sans-serif; background: #f8fafc; color: #0f172a; margin: 0; }}
         .nav {{ background: #1e293b; color: white; padding: 10px 20px; display: flex; gap: 20px; }}

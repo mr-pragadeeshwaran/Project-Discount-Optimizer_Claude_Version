@@ -1,9 +1,10 @@
 """
-pricing_panel.py — Module 1 of the Blinkit PricingAI engine.
+pricing_panel.py — Module 1 of the PricingAI engine.
 
-Adapts PepsiCo's "PricingAI" data-prep stage to a SINGLE brand (24 Mantra
-Organic) on Blinkit. Turns the daily fact_table into the weekly SKU x city
-panel that every downstream module (elasticity, optimizer) consumes.
+Adapts PepsiCo's "PricingAI" data-prep stage to a SINGLE configured brand on
+quick-commerce (BRAND_NAME / PLATFORM_NAME in v4_config). Turns the daily
+fact_table into the weekly SKU x city panel that every downstream module
+(elasticity, optimizer) consumes.
 
 PUBLIC API
 ----------

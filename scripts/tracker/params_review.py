@@ -91,7 +91,7 @@ def build_register():
     R = {
         # ── costs (91d; the COGS proxy also gets a PERMANENT nag below) ──────────
         "cogs_pct":            (g("DEFAULT_COGS_PCT"), 91, "Did procurement cost move? Still a 50%-of-MRP PROXY until per-SKU COGS is supplied."),
-        "commission_pct":      (g("DEFAULT_COMMISSION_PCT"), 91, "Has Blinkit changed its take-rate?"),
+        "commission_pct":      (g("DEFAULT_COMMISSION_PCT"), 91, f"Has {cfg.PLATFORM_NAME} changed its take-rate?"),
         "fulfillment_fee_inr": (g("DEFAULT_FULFILLMENT_FEE"), 91, "Has the per-unit fulfillment fee changed?"),
         # ── caps (budget cap = 28d, the per-planning-cycle trade-spend analogue) ──
         "budget_pct_cap":      (g("DEFAULT_BUDGET_PCT_CAP"), 28, "Is 12% of gross still the agreed weekly discount-spend ceiling?"),
@@ -268,7 +268,7 @@ def main():
         L.append(f"| {r['item']} | `{v}` | {r['status']} | {r['days_since']} | {r['horizon']} | {r['question']} |")
     L += ["", "## Quarterly review checklist", "",
           "- [ ] COGS: confirm procurement cost per SKU (or accept the 50% proxy for another quarter — knowingly).",
-          "- [ ] Commission & fulfillment: confirm Blinkit's current take-rate and per-unit fee.",
+          f"- [ ] Commission & fulfillment: confirm {cfg.PLATFORM_NAME}'s current take-rate and per-unit fee.",
           "- [ ] Budget cap: confirm the 12% weekly discount-spend ceiling with finance.",
           "- [ ] Strategic SKUs: confirm the never-auto-cut hero list (currently "
           f"{'EMPTY — no hero protection' if not cfg.STRATEGIC_SKUS else cfg.STRATEGIC_SKUS}).",

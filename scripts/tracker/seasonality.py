@@ -3,7 +3,8 @@ seasonality.py — Festival / seasonality module for the Weekly Discount Tracker
 
 Purpose
 -------
-Indian CPG demand (24 Mantra Organic on Blinkit) spikes hard around festivals.
+Indian CPG demand on quick-commerce (the configured brand × platform) spikes
+hard around festivals.
 During those weeks a brand *intentionally* runs deeper discounts. If the waste-
 scoring engine sees a deep festival discount and does not know it is a planned
 festival play, it will happily flag it as "reliably wasteful" and tell the owner
@@ -39,7 +40,7 @@ import pandas as pd
 # NOTE FOR THE INTEGRATOR / OWNER:
 #   * These are APPROXIMATE, EDITABLE week windows, not exact tithi dates.
 #   * Windows are widened to roughly the shopping run-up + festival day, because
-#     that is when Blinkit demand and planned discounts actually happen — not just
+#     that is when platform demand and planned discounts actually happen — not just
 #     the single calendar day.
 #   * 'categories' is either the string 'all' (applies to every cell) or a list of
 #     category strings that must match plan_df['category'] (case-insensitive).
@@ -58,7 +59,7 @@ DEFAULT_FESTIVAL_CALENDAR = [
     {"name": "Diwali",          "start": "2026-11-06", "end": "2026-11-10", "categories": "all"},
     {"name": "Bhai Dooj",       "start": "2026-11-10", "end": "2026-11-12", "categories": "all"},
     # Year-end grocery-stocking spike (New Year run-up) — not a religious festival
-    # but a real Blinkit demand window worth protecting from waste flags.
+    # but a real quick-commerce demand window worth protecting from waste flags.
     {"name": "Year-End / New Year", "start": "2026-12-28", "end": "2026-12-31", "categories": "all"},
 ]
 
