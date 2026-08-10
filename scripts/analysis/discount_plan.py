@@ -52,7 +52,17 @@ CAT_R2_FLOOR     = 0.60    # category model must clear this (full model, incl. F
 BADGE_BETA_FLOOR = 0.0     # discount coef must be >0 to have a finite break-even
 TREND_FLAT_BAND  = 0.05    # |recent/early - 1| <= 5% => flat
 MATERIAL_CONTRIB = 0.05    # a confounder must move >=5% of log-units to "explain" a cell
-TARGET_LO, TARGET_HI = 600_000, 1_000_000
+# C6 business-ambition band, from settings — ONE ambition number everywhere
+# (SAVINGS_TARGET_MONTHLY_INR; validate_plan's C6 quotes the same knob).
+# LO = the ambition itself, HI = 2x it: landing ABOVE double the ask reads
+# "recheck assumptions", not success. (Was hardcoded 6-10L — the original
+# 24 Mantra engagement bracket, a client constant that had leaked into code.)
+try:
+    import v4_config as _cfg_amb
+    _AMBITION = float(getattr(_cfg_amb, "SAVINGS_TARGET_MONTHLY_INR", 500_000) or 500_000)
+except Exception:
+    _AMBITION = 500_000.0
+TARGET_LO, TARGET_HI = _AMBITION, 2.0 * _AMBITION
 
 
 def _latest_facttable():
@@ -306,6 +316,11 @@ def holdout_r2(panel, formula, test_weeks=6):
     # which makes patsy prediction fail. Seasonality isn't the OOS question here.
     formula = formula.split(" + C(month)")[0]
     wks = sorted(pl["week"].unique())
+    # Short feeds (e.g. a 90-day engagement = ~10 usable weeks) cannot give up
+    # 6 whole weeks — that starved the guard below and returned nan (0/0 cats),
+    # silently skipping the accuracy check. Scale the holdout to roughly the
+    # last third of the panel, floor 2 weeks; a 26-week feed still uses 6.
+    test_weeks = min(test_weeks, max(2, len(wks) // 3))
     if len(wks) <= test_weeks + 4:
         return np.nan, 0, 0
     cut = wks[-test_weeks]; tr = pl[pl["week"] < cut]; te = pl[pl["week"] >= cut]
@@ -576,7 +591,8 @@ def main():
     print(f"\n[plan] buckets: " + " | ".join(f"{k}={v}" for k, v in sorted(counts.items())))
     print(f"[plan] ACHIEVABLE net savings (high-conf bucket-c): Rs.{achievable:,.0f}/mo "
           f"(all-conf Rs.{achievable_all:,.0f})")
-    print(f"[plan] vs Rs.6-10L target: {'MEETS' if summary['meets_target'] else 'BELOW' if achievable<TARGET_LO else 'ABOVE'}")
+    print(f"[plan] vs Rs.{TARGET_LO/1e5:g}-{TARGET_HI/1e5:g}L target: "
+          f"{'MEETS' if summary['meets_target'] else 'BELOW' if achievable<TARGET_LO else 'ABOVE'}")
     print(f"[plan] outputs -> {outdir}")
     return summary
 

@@ -348,7 +348,10 @@ def api_status():
         if "**PASS" in head:
             return True, "report verdict: PASS — champion beats both benchmarks"
         if "**FAIL" in head:
-            return False, "report verdict: FAIL — champion does not beat both naive benchmarks on pooled wMAPE"
+            # Quote the report's own headline so a "not scoreable yet" FAIL
+            # (short feed) reads differently from a "lost to the naive" FAIL.
+            first = txt.splitlines()[0].replace("#", "").replace("*", "").strip()
+            return False, f"report verdict: {first}"
         return False, "backtest present but verdict ambiguous — treat as not passing"
     bt = _safe(_backtest)
     if bt is not None:

@@ -1,53 +1,53 @@
 # Promo Calendar — MILP challenger (PromoAI-style, advisory)
 
-*624 cells x 12 weeks on grid [0, 5, 10, 15, 20]% · decomposed per category x city · HiGHS via scipy.optimize.milp · run `20260717_214500` · total solve wall-clock **7.0s** across 186 subproblems.*
+*715 cells x 12 weeks on grid [0, 5, 10, 15, 20]% · decomposed per category x city · HiGHS via scipy.optimize.milp · run `20260810_143823` · total solve wall-clock **33.2s** across 70 subproblems.*
 
 ## The calendar in one paragraph
 
-- Horizon net revenue of the chosen calendar: **Rs104,108,638** vs **Rs104,327,114** if every cell just held its current (grid-snapped) discount — **-0.21%**. (Note: that hold-current plan is itself NOT rule-feasible — holding a promo discount 12 straight weeks breaks the max-duration rule — so it is a reference point, not an available alternative.)
-- Promo cell-weeks scheduled: **3212** of 7488 (43%). Weekly discount spend ranges Rs418,730–Rs614,097.
-- Defense-held cells (kept at current level, all weeks): **3 cell-solves**.
+- Horizon net revenue of the chosen calendar: **Rs444,261,955** vs **Rs442,851,977** if every cell just held its current (grid-snapped) discount — **+0.32%**. (Note: that hold-current plan is itself NOT rule-feasible — holding a promo discount 12 straight weeks breaks the max-duration rule — so it is a reference point, not an available alternative.)
+- Promo cell-weeks scheduled: **320** of 8580 (4%). Weekly discount spend ranges Rs8,819–Rs30,790.
+- Defense-held cells (kept at current level, all weeks): **0 cell-solves**.
 
 **Read this honestly:** the demand kernel's validated honesty clamps credit volume from a discount only where own-price elasticity is *reliably* negative — which on this portfolio is almost nowhere. A net-revenue-max calendar therefore parks most cells at 0% discount and the 'calendar' structure you see comes from the constraints (holds, budget, duration rules), not from demand seasonality (the kernel is stationary across weeks). This is the same conclusion as the budget allocator and the confounder-controlled study: discount spend on this portfolio is mostly margin giveaway.
 
 ## Solver receipts (val_14: per-solve MIP gap, status, runtime)
 
 - Gap target: **1.0%** relative; time limit 60.0s per subproblem.
-- **184/186** subproblems solved to the gap target; **0** hit the time limit (kept incumbent, residual gap flagged below); **0** infeasible.
-- Worst achieved gap: **0.9994%**.
-- Total runtime: **7.0s**.
+- **70/70** subproblems solved to the gap target; **0** hit the time limit (kept incumbent, residual gap flagged below); **0** infeasible.
+- Worst achieved gap: **0.0007%**.
+- Total runtime: **33.2s**.
 
 | Category | City | Cells | Status | Gap target | Achieved gap | Time (s) | Stop reason |
 |---|---|---:|---:|---:|---:|---:|---|
-| Wheat Atta | Bangalore | 5 | 0 | 1.0% | 0.1473% | 0.69 | target_gap_hit |
-| Besan & Gram Flour | Bangalore | 1 | 0 | 1.0% | 0.0000% | 0.28 | target_gap_hit |
-| Dal & Pulses | Chandigarh T | 9 | 0 | 1.0% | 0.8916% | 0.16 | target_gap_hit |
-| Dal & Pulses | Others | 17 | 0 | 1.0% | 0.6645% | 0.14 | target_gap_hit |
-| Dal & Pulses | Kolkata | 12 | 0 | 1.0% | 0.1915% | 0.11 | target_gap_hit |
-| Dal & Pulses | Delhi-NCR | 12 | 0 | 1.0% | 0.6990% | 0.09 | target_gap_hit |
-| Dal & Pulses | Mumbai | 8 | 0 | 1.0% | 0.6125% | 0.08 | target_gap_hit |
-| Wheat Atta | Hyderabad | 5 | 0 | 1.0% | 0.7845% | 0.08 | target_gap_hit |
-| Dal & Pulses | Pune | 12 | 0 | 1.0% | 0.6908% | 0.08 | target_gap_hit |
-| Dal & Pulses | Ahmedabad | 6 | 0 | 1.0% | 0.5649% | 0.08 | target_gap_hit |
-| Dal & Pulses | Bangalore | 11 | 0 | 1.0% | 0.7253% | 0.08 | target_gap_hit |
-| Dal & Pulses | Hyderabad | 12 | 0 | 1.0% | 0.4812% | 0.08 | target_gap_hit |
-| Dal & Pulses | Lucknow | 10 | 0 | 1.0% | 0.4187% | 0.08 | target_gap_hit |
-| Single Spice Powder | Kolkata | 5 | 0 | 1.0% | 0.0000% | 0.06 | target_gap_hit |
-| Single Spice Powder | Hyderabad | 5 | 0 | 1.0% | 0.0000% | 0.06 | target_gap_hit |
+| Yogurt | Mumbai | 60 | 0 | 1.0% | 0.0000% | 4.58 | target_gap_hit |
+| Yogurt | Others | 56 | 0 | 1.0% | 0.0000% | 3.97 | target_gap_hit |
+| Yogurt | Delhi-NCR | 54 | 0 | 1.0% | 0.0000% | 3.50 | target_gap_hit |
+| Yogurt | Pune | 52 | 0 | 1.0% | 0.0000% | 3.20 | target_gap_hit |
+| Yogurt | Ahmedabad | 52 | 0 | 1.0% | 0.0000% | 3.19 | target_gap_hit |
+| Yogurt | Kolkata | 52 | 0 | 1.0% | 0.0000% | 3.08 | target_gap_hit |
+| Yogurt | Lucknow | 52 | 0 | 1.0% | 0.0000% | 3.05 | target_gap_hit |
+| Yogurt | Bangalore | 48 | 0 | 1.0% | 0.0000% | 2.64 | target_gap_hit |
+| Yogurt | Hyderabad | 44 | 0 | 1.0% | 0.0000% | 2.19 | target_gap_hit |
+| Yogurt | Chennai | 39 | 0 | 1.0% | 0.0000% | 1.59 | target_gap_hit |
+| Almond Milk | Ahmedabad | 2 | 0 | 1.0% | 0.0000% | 0.25 | target_gap_hit |
+| Protein Milkshake | Others | 11 | 0 | 1.0% | 0.0000% | 0.08 | target_gap_hit |
+| Protein Milkshake | Delhi-NCR | 11 | 0 | 1.0% | 0.0000% | 0.08 | target_gap_hit |
+| Protein Milkshake | Mumbai | 13 | 0 | 1.0% | 0.0000% | 0.08 | target_gap_hit |
+| Protein Milkshake | Pune | 10 | 0 | 1.0% | 0.0000% | 0.06 | target_gap_hit |
 
-_(top 15 by solve time shown; full table in `promo_solver_report.csv` — 186 rows)_
+_(top 15 by solve time shown; full table in `promo_solver_report.csv` — 70 rows)_
 
 ## Active constraint templates (from promo_constraints.json)
 
 | Template | Rows generated | Cells touched | Note |
 |---|---:|---:|---|
-| competitive_defense_hold | 0 | 3 | held at current level (defense_hold.csv) |
-| promotion_exclusivity | 7488 | 624 | one level per cell-week |
-| min_promo_duration | 7452 | 621 | min run 2 wk |
-| max_promo_duration | 3726 | 621 | max run 6 wk |
-| min_promo_spacing | 5589 | 621 | starts >= 4 wk apart |
-| max_simultaneous_promos | 2208 | 621 | <= 3 live promos/wk |
-| weekly_budget_cap | 2208 | 624 | spend <= 12% of group baseline revenue/wk (pro-rata per category x city) |
+| competitive_defense_hold | 0 | 0 | held at current level (defense_hold.csv) |
+| promotion_exclusivity | 8580 | 715 | one level per cell-week |
+| min_promo_duration | 8580 | 715 | min run 2 wk |
+| max_promo_duration | 4290 | 715 | max run 6 wk |
+| min_promo_spacing | 6435 | 715 | starts >= 4 wk apart |
+| max_simultaneous_promos | 840 | 715 | <= 3 live promos/wk |
+| weekly_budget_cap | 792 | 715 | spend <= 12% of group baseline revenue/wk (pro-rata per category x city) |
 
 ## How to read / operate
 

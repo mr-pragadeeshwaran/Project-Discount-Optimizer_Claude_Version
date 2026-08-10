@@ -79,15 +79,23 @@ PARTIAL_WEEK_MIN_DAYS = 5  # trailing weeks with fewer median days are dropped:
                            # every model's error (~200% wMAPE artifact).
 
 # Must match dp.fit_models' base formula (checked against source at runtime).
+# MODEL v2.1: comp_share removed (outcome-derived bad control); competitive
+# controls are rpi_w + competitor availability/ad-SOV + organic visibility.
 CHAMPION_FORMULA = ("np.log1p(units) ~ C(cell_id) + disc + disc_sq + log_osa "
-                    "+ log_adsov + comp_share + lag1_lu + lag2_lu")
+                    "+ log_adsov + rpi_w + log_comp_osa + log_comp_adsov "
+                    "+ log_orgsov + lag1_lu + lag2_lu")
 
 
 def _check_formula_drift():
     """Warn loudly if the champion's base formula ever drifts from ours."""
+    # Normalise away whitespace AND quote characters: dp writes its formula as
+    # adjacent string literals across lines, so raw source text carries `"` and
+    # newlines mid-formula that a plain space-strip comparison trips over.
+    def _norm(s):
+        return "".join(ch for ch in s if ch not in " \n\"'")
     src = inspect.getsource(dp.fit_models)
     core = CHAMPION_FORMULA.split("~")[1].strip()
-    if core.replace(" ", "") not in src.replace(" ", ""):
+    if _norm(core) not in _norm(src):
         print("[backtest] WARNING: champion formula in discount_plan.py no longer "
               "matches CHAMPION_FORMULA here — results may not reflect production.")
 
@@ -302,6 +310,19 @@ def run_backtest(n_origins=5, step_weeks=2, horizon_weeks=4, max_minutes=8.0):
         print("[backtest] FAIL: no scoreable folds — not enough data for a rolling backtest.")
         for s in skipped:
             print(f"    {s}")
+        # A stale receipt is worse than no receipt: the dashboard reads
+        # backtest_folds.csv / BACKTEST_REPORT.md, and leaving a previous
+        # run's files in place would show ITS verdict for THIS data.
+        folds_csv = os.path.join(OUT_DIR, "backtest_folds.csv")
+        if os.path.exists(folds_csv):
+            os.remove(folds_csv)
+        with open(os.path.join(OUT_DIR, "BACKTEST_REPORT.md"), "w", encoding="utf-8") as f:
+            f.write("# Rolling Backtest — **FAIL (not scoreable yet)**\n\n"
+                    "No scoreable folds: the feed does not yet hold enough weekly "
+                    "history for a rolling backtest (each fold needs 12 training "
+                    "weeks).\n\n"
+                    + "".join(f"- {s}\n" for s in skipped)
+                    + "\nRe-run after more weekly exports accumulate.\n")
         return None
 
     pooled = pd.concat(pooled_frames, ignore_index=True)

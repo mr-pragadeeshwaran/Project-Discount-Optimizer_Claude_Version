@@ -57,6 +57,9 @@ def run_pipeline(stages=None):
         fact_df = prepare_fact_table(context["raw_df"], context["calendar_df"], run_dir=run_dir)
         fact_df.to_csv(os.path.join(run_dir, "fact_table.csv"), index=False)
         context["fact_df"] = fact_df
+        # The raw all-brand frame is by far the largest object in memory and no
+        # later stage reads it — free it so Stage 4's fits get the RAM.
+        context.pop("raw_df", None)
 
     # ── STAGE 3: FEATURE ENGINEERING ────────────────────────────────
     if 3 in stages:

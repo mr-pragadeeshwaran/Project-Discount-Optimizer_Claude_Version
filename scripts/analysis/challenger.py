@@ -122,7 +122,22 @@ def main():
 
     _report(run, oosA, nA, hiA, allA, oosB, nB, hiB, allB, comp_agg, comp_sane, len(flipped), defense, accept)
     print(f"[challenger] wrote {os.path.join(ROOT, 'output', 'DISCOUNT_PLAN', 'CHALLENGER_REPORT.md')}")
-    _write_defense_hold(defense, diag_A)
+    # B's bucket flips are DEFENSIVE EVIDENCE only when B is itself a credible
+    # competition model: accurate out of sample, with a real, sane-signed
+    # competitor coefficient and healthy category fits (the adoption rule minus
+    # "must beat A" — a credible-but-second B still earns its warnings). A
+    # DEGENERATE B (nan OOS / nan comp beta — e.g. when competitor coverage is
+    # too thin to fit) proves nothing; letting its flips hold the whole cut
+    # wave would silently convert "couldn't test competition" into "cancel the
+    # plan". In that case write an empty hold file (which also releases any
+    # prior holds, per the retrain contract below).
+    defense_credible = bool(np.isfinite(oosB) and oosB >= OOS_BAR
+                            and comp_sane and comp_informative and fits_ok)
+    if len(defense) and not defense_credible:
+        print(f"[challenger] defense holds SUPPRESSED: Model B is not a credible "
+              f"competition model (OOS={oosB}, comp beta={comp_agg:+.4f}) — its "
+              f"{len(defense)} 'waste'->defense flip(s) are noise, not evidence.")
+    _write_defense_hold(defense if defense_credible else defense.iloc[0:0], diag_A)
     return {"accept": accept, "oosA": oosA, "oosB": oosB, "hiA": hiA, "hiB": hiB, "comp_agg": comp_agg}
 
 

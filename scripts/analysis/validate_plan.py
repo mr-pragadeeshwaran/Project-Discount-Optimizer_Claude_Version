@@ -59,9 +59,15 @@ def main():
 
     # ── C1: discount isolated from OSA / Ad SOV / competitive ──
     f = S["formula"]; c1 = []
-    for token, name in [("log_osa", "OSA"), ("log_adsov", "Ad SOV"), ("comp_share", "competitive")]:
+    for token, name in [("log_osa", "OSA"), ("log_adsov", "Ad SOV")]:
         if token not in f:
             c1.append(f"model formula missing {name} control ({token})")
+    # MODEL v2: the competitive control is the competitor relative-price index
+    # (rpi_w) — comp_share (own category share) was deliberately REMOVED as an
+    # outcome-derived bad control. Accept either token so pre-v2 run summaries
+    # still validate against the formula they were fitted with.
+    if not any(t in f for t in ("rpi_w", "comp_share")):
+        c1.append("model formula missing competitive control (rpi_w)")
     # competitive control must be non-degenerate (beta_comp varies across cats, not all ~0)
     betas_comp = [v.get("beta_comp") for v in S["models"].values() if v.get("ok")]
     betas_comp = [b for b in betas_comp if isinstance(b, (int, float)) and np.isfinite(b)]

@@ -158,6 +158,10 @@ def train_hierarchical_model(feat_df: pd.DataFrame) -> dict:
           f"log_units ~ C(sku_city) + log_price + badge_resid + controls + lags/DOW")
 
     # ── Fit one Huber-robust OLS per category ───────────────────────
+    # The regressor list mirrors formula_core minus the C(sku_city) term — it
+    # is what the within-FE fallback fits on when the dummy matrix is too big.
+    xcols = (["log_price", "badge_resid", "osa_rolling_7d", "log_ad_sov",
+              "rpi", "is_weekend"] + month_cols + dow_cols + lag_cols_avail)
     models = {}
     cat_metrics = []
     for cat, sub_tr in train.groupby("category"):
@@ -166,31 +170,10 @@ def train_hierarchical_model(feat_df: pd.DataFrame) -> dict:
             print(f"    Skipping '{cat}': only {len(sub_tr)} rows / {n_cells_cat} cells")
             continue
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            m = None
-            try:
-                cand = smf.rlm(formula_core, data=sub_tr, M=sm.robust.norms.HuberT()).fit()
-                if _fit_is_sane(cand, sub_tr):
-                    m = cand
-                else:
-                    print(f"    {cat}: RLM fit diverged (non-finite params or absurd "
-                          f"in-sample predictions), falling back to OLS")
-            except Exception as e:
-                print(f"    {cat}: RLM failed ({type(e).__name__}: {e}), using OLS")
-            if m is None:
-                try:
-                    cand = smf.ols(formula_core, data=sub_tr).fit()
-                    if _fit_is_sane(cand, sub_tr):
-                        m = cand
-                    else:
-                        print(f"    {cat}: OLS fit also degenerate; skipping category "
-                              f"(cells fall back to category-median/default elasticity)")
-                        continue
-                except Exception as e2:
-                    print(f"    {cat}: OLS also failed ({e2}); skipping")
-                    continue
-            models[cat] = m
+        m = _fit_category(cat, sub_tr, formula_core, xcols, n_cells_cat)
+        if m is None:
+            continue
+        models[cat] = m
 
         # Category-level elasticity & badge coefficient
         pe_cat = float(m.params.get("log_price",   _global_default_elasticity()))
@@ -331,16 +314,162 @@ def _fit_is_sane(m, df: pd.DataFrame) -> bool:
     (residual scale → 0 gives runaway coefficients); a diverged fit must never
     flow into elasticities, per-cell R² or the customer-facing accuracy report.
     Sane = all params finite AND in-sample log-unit predictions finite and
-    bounded (|pred| ≤ 15 → exp(15) ≈ 3.3M units/day, far beyond any real cell)."""
+    bounded (|pred| ≤ 15 → exp(15) ≈ 3.3M units/day, far beyond any real cell)
+    AND the key coefficient's uncertainty is meaningful: a rank-deficient /
+    near-singular fit can keep finite in-sample predictions while carrying an
+    absurd standard error (observed on sparse panels: se≈9e4 on log_price,
+    se≈5e9 on badge) — and then explodes on held-out data. se > 10 on an
+    elasticity bounded in [-4, -0.3] carries no information; such a category
+    must fall through to the robust per-cell-median prior path instead."""
     try:
         if not np.all(np.isfinite(np.asarray(m.params, dtype=float))):
             return False
         yp = np.asarray(m.predict(df), dtype=float)
         if yp.size == 0 or not np.all(np.isfinite(yp)):
             return False
-        return float(np.max(np.abs(yp))) <= 15.0
+        if float(np.max(np.abs(yp))) > 15.0:
+            return False
+        try:
+            se_p = float(pd.Series(m.bse).get("log_price", 0.0))
+        except Exception:
+            se_p = 0.0
+        if not np.isfinite(se_p) or se_p > 10.0:
+            return False
+        return True
     except Exception:
         return False
+
+
+# ── Memory-safe fixed-effects fitting ────────────────────────────────
+# The formula path materialises C(sku_city) as DENSE dummy columns: a category
+# with hundreds of cells × tens of thousands of rows needs a ~100 MB design
+# matrix (several copies during IRLS/SVD), which this small-RAM deployment
+# machine cannot allocate — observed as "MemoryError: Unable to allocate
+# 86.2 MiB" on the dominant category, silently pushing ALL its cells onto the
+# generic default elasticity. Above this budget the SAME fixed-effects model
+# is fitted via the within (FWL) transformation instead — cell effects are
+# absorbed by demeaning within cell, which yields IDENTICAL OLS coefficients
+# (Frisch–Waugh–Lovell) and the standard Huber-weighted FE estimator for RLM,
+# with a cells-free design matrix.
+_FE_DUMMY_BUDGET_MB = 32.0
+
+
+class _FEWithinModel:
+    """Per-category fixed-effects fit computed via the within transform.
+
+    Exposes the surface downstream code uses from a statsmodels result:
+    .params / .bse (Series keyed by regressor) and .predict(df) → Series of
+    predicted log_units (cell intercept + X @ beta; unseen cells get the
+    average intercept, rows with missing regressors predict NaN)."""
+
+    def __init__(self, params, bse, alphas, alpha_global, xcols):
+        self.params = params
+        self.bse = bse
+        self._alphas = alphas
+        self._alpha_global = float(alpha_global)
+        self._xcols = list(xcols)
+
+    def predict(self, df: pd.DataFrame) -> pd.Series:
+        X = df.reindex(columns=self._xcols).astype(float)
+        beta = self.params.reindex(self._xcols).astype(float).values
+        base = X.values @ beta
+        if "sku_city" in df.columns:
+            alpha = (df["sku_city"].map(self._alphas)
+                     .fillna(self._alpha_global).astype(float).values)
+        else:
+            alpha = self._alpha_global
+        return pd.Series(base + alpha, index=df.index)
+
+
+def _fit_category_within(cat: str, sub_tr: pd.DataFrame, xcols: list):
+    """Fit the per-category FE model on the cell-demeaned (within) system:
+    RLM(HuberT) first, OLS fallback — the same ladder as the formula path.
+    Returns a _FEWithinModel or None (caller then uses the prior path)."""
+    d = sub_tr[["sku_city", "log_units"] + xcols].dropna()
+    if len(d) < 200 or d["sku_city"].nunique() < 2:
+        print(f"    {cat}: too little complete data for the within-FE fit; skipping")
+        return None
+    g = d.groupby("sku_city")
+    y_w = (d["log_units"] - g["log_units"].transform("mean")).values
+    X_w = d[xcols] - g[xcols].transform("mean")
+    keep = [c for c in xcols if float(X_w[c].abs().max()) > 1e-12]
+    if "log_price" not in keep:
+        print(f"    {cat}: log_price has no within-cell variation; skipping")
+        return None
+    Xk = X_w[keep].values
+    n, k = Xk.shape
+    n_cells = int(d["sku_city"].nunique())
+    # Demeaned-system SEs understate uncertainty by the absorbed-FE degrees of
+    # freedom; scale them back to the dummy-model equivalent.
+    dof_factor = float(np.sqrt(max(n - k, 1) / max(n - k - (n_cells - 1), 1)))
+    cell_xmean = g[xcols].mean()
+    cell_ymean = g["log_units"].mean()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for name, fitter in (
+            ("RLM", lambda: sm.RLM(y_w, Xk, M=sm.robust.norms.HuberT()).fit()),
+            ("OLS", lambda: sm.OLS(y_w, Xk).fit()),
+        ):
+            try:
+                r = fitter()
+            except Exception as e:
+                print(f"    {cat}: within-FE {name} failed ({type(e).__name__}: {e})")
+                continue
+            params = pd.Series(0.0, index=xcols, dtype=float)
+            params[keep] = np.asarray(r.params, dtype=float)
+            bse = pd.Series(np.inf, index=xcols, dtype=float)
+            bse[keep] = np.asarray(r.bse, dtype=float) * dof_factor
+            beta = params.reindex(xcols).values
+            alphas = (cell_ymean - pd.Series(cell_xmean.values @ beta,
+                                             index=cell_xmean.index)).to_dict()
+            cand = _FEWithinModel(params, bse, alphas,
+                                  float(np.mean(list(alphas.values()))), xcols)
+            if _fit_is_sane(cand, d):
+                return cand
+            print(f"    {cat}: within-FE {name} fit degenerate (diverged or absurd SE), "
+                  f"trying next")
+    print(f"    {cat}: within-FE fits also degenerate; skipping category "
+          f"(cells fall back to category-median/default elasticity)")
+    return None
+
+
+def _fit_category(cat: str, sub_tr: pd.DataFrame, formula_core: str,
+                  xcols: list, n_cells_cat: int):
+    """RLM → OLS ladder on the dummy-FE formula (unchanged behaviour), switching
+    to the within-FE transform when the dummy matrix would not fit in memory.
+    Returns a fitted model or None (caller skips → prior path)."""
+    est_mb = len(sub_tr) * (n_cells_cat + len(xcols) + 5) * 8 / 1e6
+    if est_mb > _FE_DUMMY_BUDGET_MB:
+        print(f"    {cat}: dummy-FE matrix would need ~{est_mb:.0f} MB "
+              f"({n_cells_cat} cells × {len(sub_tr):,} rows) — using the within-FE "
+              f"transform (same fixed-effects model, cells absorbed by demeaning)")
+        return _fit_category_within(cat, sub_tr, xcols)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            cand = smf.rlm(formula_core, data=sub_tr, M=sm.robust.norms.HuberT()).fit()
+            if _fit_is_sane(cand, sub_tr):
+                return cand
+            print(f"    {cat}: RLM fit diverged (non-finite params, absurd "
+                  f"in-sample predictions or absurd SEs), falling back to OLS")
+        except MemoryError:
+            print(f"    {cat}: RLM out of memory on the dummy-FE matrix, "
+                  f"switching to the within-FE transform")
+            return _fit_category_within(cat, sub_tr, xcols)
+        except Exception as e:
+            print(f"    {cat}: RLM failed ({type(e).__name__}: {e}), using OLS")
+        try:
+            cand = smf.ols(formula_core, data=sub_tr).fit()
+            if _fit_is_sane(cand, sub_tr):
+                return cand
+            print(f"    {cat}: OLS fit also degenerate; trying the within-FE transform")
+        except MemoryError:
+            print(f"    {cat}: OLS out of memory on the dummy-FE matrix, "
+                  f"switching to the within-FE transform")
+        except Exception as e2:
+            print(f"    {cat}: OLS also failed ({e2}); trying the within-FE transform")
+    return _fit_category_within(cat, sub_tr, xcols)
 
 
 def _decorrelate_badge(g: pd.DataFrame) -> pd.Series:
