@@ -30,52 +30,52 @@ def write_settings(cfgdir, body, name="settings.csv"):
 
 # ── no file ⇒ defaults untouched ───────────────────────────────────────────
 def test_no_file_leaves_namespace_untouched(cfgdir):
-    ns = {"SAVINGS_TARGET_MONTHLY_INR": 500_000}
+    ns = {"TRAIN_LOOKBACK_DAYS": 180}
     assert sl.apply_to(ns) == {}
-    assert ns["SAVINGS_TARGET_MONTHLY_INR"] == 500_000
+    assert ns["TRAIN_LOOKBACK_DAYS"] == 180
     assert sl.STATE["source"] is None
 
 
-# ── the ask: the monthly target comes from the file ────────────────────────
-def test_monthly_target_overridden_from_file(cfgdir):
-    write_settings(cfgdir, "SAVINGS_TARGET_MONTHLY_INR,400000\n")
-    ns = {"SAVINGS_TARGET_MONTHLY_INR": 500_000}
+# ── an integer knob comes from the file ────────────────────────────────────
+def test_integer_knob_overridden_from_file(cfgdir):
+    write_settings(cfgdir, "TRAIN_LOOKBACK_DAYS,240\n")
+    ns = {"TRAIN_LOOKBACK_DAYS": 180}
     sl.apply_to(ns)
-    assert ns["SAVINGS_TARGET_MONTHLY_INR"] == 400_000
-    assert sl.STATE["overrides"]["SAVINGS_TARGET_MONTHLY_INR"] == 400_000
+    assert ns["TRAIN_LOOKBACK_DAYS"] == 240
+    assert sl.STATE["overrides"]["TRAIN_LOOKBACK_DAYS"] == 240
 
 
 def test_blank_value_keeps_the_default(cfgdir):
-    write_settings(cfgdir, "SAVINGS_TARGET_MONTHLY_INR,\nTARGET_DISCOUNT_PCT,8\n")
-    ns = {"SAVINGS_TARGET_MONTHLY_INR": 500_000, "TARGET_DISCOUNT_PCT": 10.0}
+    write_settings(cfgdir, "TRAIN_LOOKBACK_DAYS,\nTARGET_DISCOUNT_PCT,8\n")
+    ns = {"TRAIN_LOOKBACK_DAYS": 180, "TARGET_DISCOUNT_PCT": 10.0}
     sl.apply_to(ns)
-    assert ns["SAVINGS_TARGET_MONTHLY_INR"] == 500_000     # blank ⇒ default
+    assert ns["TRAIN_LOOKBACK_DAYS"] == 180                # blank ⇒ default
     assert ns["TARGET_DISCOUNT_PCT"] == 8.0
 
 
-def test_excel_float_target_becomes_int(cfgdir):
-    """Excel writes 400000 as 400000.0 — that must not become a float target."""
-    write_settings(cfgdir, "SAVINGS_TARGET_MONTHLY_INR,400000.0\n")
+def test_excel_float_integer_becomes_int(cfgdir):
+    """Excel writes 240 as 240.0 — that must not become a float knob."""
+    write_settings(cfgdir, "TRAIN_LOOKBACK_DAYS,240.0\n")
     ns = {}
     sl.apply_to(ns)
-    assert ns["SAVINGS_TARGET_MONTHLY_INR"] == 400_000
-    assert isinstance(ns["SAVINGS_TARGET_MONTHLY_INR"], int)
+    assert ns["TRAIN_LOOKBACK_DAYS"] == 240
+    assert isinstance(ns["TRAIN_LOOKBACK_DAYS"], int)
 
 
 def test_thousands_separators_accepted(cfgdir):
-    write_settings(cfgdir, 'SAVINGS_TARGET_MONTHLY_INR,"450,000"\n')
+    write_settings(cfgdir, 'TRAIN_LOOKBACK_DAYS,"1,200"\n')
     ns = {}
     sl.apply_to(ns)
-    assert ns["SAVINGS_TARGET_MONTHLY_INR"] == 450_000
+    assert ns["TRAIN_LOOKBACK_DAYS"] == 1_200
 
 
 # ── fail loud: typos ───────────────────────────────────────────────────────
 def test_unknown_key_is_rejected(cfgdir):
-    write_settings(cfgdir, "SAVINGS_TARGET_MONTHY_INR,400000\n")   # typo: MONTHY
+    write_settings(cfgdir, "TRAIN_LOOKBACK_DAY,240\n")     # typo: DAY
     with pytest.raises(sl.SettingsError) as e:
         sl.apply_to({})
-    assert "SAVINGS_TARGET_MONTHY_INR" in str(e.value)
-    assert "SAVINGS_TARGET_MONTHLY_INR" in str(e.value)            # suggests the real one
+    assert "TRAIN_LOOKBACK_DAY" in str(e.value)
+    assert "TRAIN_LOOKBACK_DAYS" in str(e.value)           # suggests the real one
 
 
 def test_every_problem_is_reported_at_once(cfgdir):
@@ -214,9 +214,9 @@ def test_xlsx_template_round_trips_every_registry_key(cfgdir):
     for key, typ, _s, _d in sl.REGISTRY:
         live = getattr(cfg, key)
         if live is None:
-            # A None default means "auto-derive" (e.g. SAVINGS_TARGET_MONTHLY_INR):
-            # the template correctly writes a BLANK cell, and blank round-trips
-            # to "not overridden" — the key must NOT appear in the applied set.
+            # A None default means "auto-derive": the template correctly writes
+            # a BLANK cell, and blank round-trips to "not overridden" — the key
+            # must NOT appear in the applied set.
             assert key not in applied, key
             continue
         if isinstance(live, (list, tuple)):

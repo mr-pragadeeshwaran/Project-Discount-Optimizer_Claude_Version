@@ -26,7 +26,7 @@ File rules:
   - A BLANK value means "use the code default" — it is not an empty string.
   - To set an explicitly empty list, write `none` or `[]`.
   - An unknown key is an ERROR, not a silent no-op (catches typos like
-    SAVINGS_TARGET_MONTHY_INR).
+    TRAIN_LOOKBACK_DAY).
   - A Festivals/Platform Events sheet with rows REPLACES the code calendar
     outright (the template ships pre-filled with the current calendar, so
     what you see in the file is what the system uses).
@@ -151,15 +151,8 @@ UNIT_HELP = {
 # v4_config.py and are read from it, so there is exactly one source of truth.
 REGISTRY = [
     # ── Business targets ──
-    ("SAVINGS_TARGET_MONTHLY_INR", "integer", "Business targets",
-     "Monthly savings ambition in Rs. Gate C6 reports MEETS/BELOW against this. "
-     "A verdict only — a smaller plan still executes. Blank = auto-derive as "
-     "SAVINGS_TARGET_PCT_OF_SPEND x the observed monthly discount spend."),
-    ("SAVINGS_TARGET_PCT_OF_SPEND", "percent", "Business targets",
-     "When no explicit ambition is set: the C6 bar as a percent of observed "
-     "monthly discount spend. 5 = the low end of the 'brands waste 5-10% of "
-     "their discount budget' claim — a bar the engine must earn, never one "
-     "derived from its own findings."),
+    # (No savings-target knob, deliberately: the engine reports the confident
+    #  achievable amount; sufficiency is a contract question, not a setting.)
     ("TARGET_DISCOUNT_PCT", "percent", "Business targets",
      "Headline discount % the brand is steering toward (dashboard KPI)."),
     ("TARGET_WEIGHTED_DISCOUNT_PCT", "percent", "Business targets",

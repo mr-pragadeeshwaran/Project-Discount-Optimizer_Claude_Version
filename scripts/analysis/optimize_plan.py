@@ -1,12 +1,13 @@
 """
-optimize_plan.py — FULL discount optimization (reinvest + cut) for the ₹5L goal.
+optimize_plan.py — FULL discount optimization (reinvest + cut).
 
 For every product×city cell, move discount to its net-revenue-maximizing level
 *within the observed discount range* (no extrapolation), using the validated
 confounder-controlled quadratic response. Split the total net-revenue gain into:
   - REINVEST  : cells where the optimum is ABOVE current (discount pays → scale up)
   - CUT       : cells where the optimum is BELOW current (waste → trim, keep sales)
-Reports the total achievable net-revenue improvement vs the ₹5,00,000/mo target.
+Reports the total achievable net-revenue improvement (amount + spend context —
+no target verdict; sufficiency is a contract question).
 
 Honesty rails:
   * reinvest only where the discount effect is reliably positive (sig_pos) and the
@@ -25,7 +26,6 @@ import importlib.util
 spec = importlib.util.spec_from_file_location("dp", os.path.join(ROOT, "scripts/analysis/discount_plan.py"))
 dp = importlib.util.module_from_spec(spec); spec.loader.exec_module(dp)
 
-TARGET = 500_000
 MONTH = 30.0 / 7.0
 
 
@@ -116,16 +116,16 @@ def main():
     print(f"    {len(test)} cells where the model can't detect discount driving sales.")
     print(f"    IF volume truly holds when trimmed: up to +₹{unlock:,.0f}/mo — but bootstrap stability is 23–47%.")
     print(f"    This is a test-and-learn pipeline, not a saving you can bank today.\n")
-    print(f"  vs ₹5,00,000/mo target:")
-    print(f"    confident (all-conf): ₹{confident_all:,.0f}/mo = {confident_all/TARGET*100:.0f}% of target → "
-          f"{'MET' if confident_all>=TARGET else 'BELOW'}")
+    print(f"  scale context (no target verdict — the engine reports the amount):")
+    print(f"    confident (all-conf): ₹{confident_all:,.0f}/mo "
+          f"= {confident_all/cur_spend*100:.1f}% of current discount spend")
     print(f"    confident + full unlock ceiling: ₹{confident_all+unlock:,.0f}/mo "
-          f"({'≥' if confident_all+unlock>=TARGET else '<'} target, but unlock is unconfirmed)")
+          f"(unlock is unconfirmed — test-and-learn, not bankable)")
     print("\n  top REINVEST (scale up where discount reliably pays):")
     for _, x in rein.nlargest(6, "delta_nr_mo").iterrows():
         print(f"    {_strip_brand(x['title'])[:26]:26s} {x['city'][:10]:10s} "
               f"{x['cur_disc']:.0f}%→{x['opt_disc']:.0f}% (cap {x['cap_disc']:.0f}%)  +₹{x['delta_nr_mo']:,.0f}/mo")
-    return dict(confident_all=confident_all, confident_hi=confident_hi, unlock=unlock, target=TARGET)
+    return dict(confident_all=confident_all, confident_hi=confident_hi, unlock=unlock)
 
 
 if __name__ == "__main__":

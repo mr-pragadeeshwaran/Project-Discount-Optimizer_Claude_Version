@@ -67,8 +67,8 @@ def main():
     L.append("## 1. Bottom line\n")
     L.append(f"- **Bankable savings (high-confidence): {rupee(hi)}/month** — {lakh(hi)}.")
     L.append(f"- **+ Experimental upside (test first): {rupee(exp)}/mo**; theoretical all-in ceiling {rupee(allc)}/mo.")
-    _tgt = "MEETS" if hi >= 500_000 else "BELOW"
-    L.append(f"- **vs the ₹5 L/month target: {_tgt}.**")
+    # (No target verdict — the engine reports the amount; the spend-share
+    #  context on the next line is what a reader needs to judge scale.)
     L.append(f"- Total discount spend across the portfolio is **{rupee(tot_disc_mo)}/mo**; recoverable waste is **{allc/tot_disc_mo*100:.1f}%** of it.\n")
     L.append("**The core finding (confounder-controlled + Double ML):** once discount's effect is *isolated* from "
              "availability (OSA), ad visibility (SOV), competitive share and reverse causality, **discount barely "

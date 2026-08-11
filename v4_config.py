@@ -253,21 +253,13 @@ DRIFT_ALERT_THRESHOLD = 0.15      # 15% prediction error = drift
 TARGET_DISCOUNT_PCT = 10.0
 TARGET_QUARTER = "Q4 2026"
 
-# Business savings ambition, ₹/month. Gate C6 in validate_plan.py reports
-# MEETS/BELOW against this bar — a verdict, not an abort (a safe plan smaller
-# than the ambition must still execute). None (the default) = AUTO-DERIVE the
-# bar from the input side of the data: SAVINGS_TARGET_PCT_OF_SPEND × the
-# engagement's observed monthly discount spend — so a new client never
-# inherits the previous client's rupee number. Set an explicit value ONLY
-# when the client has named their own ask (the original 24 Mantra question
-# was "can we save ₹5L/month?" — 5L_VERDICT.md). The bar must never be set
-# from the engine's own findings; that would make gate C6 circular.
-SAVINGS_TARGET_MONTHLY_INR = None
-
-# The auto-derived ambition bar: this percent of observed monthly discount
-# spend. 5 = the LOW end of the "brands waste 5-10% of their discount budget"
-# claim in the sales material — a bar the engine has to EARN on each client.
-SAVINGS_TARGET_PCT_OF_SPEND = 5.0
+# NOTE: there is deliberately NO savings-target/ambition knob. The engine
+# reports the confident achievable savings (with its share of observed
+# discount spend as context); whether that amount is sufficient is a
+# contract/engagement question, never a validation gate. History: a target
+# knob existed (the original "can we save ₹5L/month?" 24 Mantra ask,
+# 5L_VERDICT.md) and was removed — every bar an operator could choose after
+# seeing the data proved to be inherited noise or circular self-confirmation.
 
 # ── Portfolio flywheel: target weighted discount across all cells ──
 # Stage 8 rebalances cuts ↔ reinvestments to move the revenue-weighted

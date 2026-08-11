@@ -1,7 +1,5 @@
 # Edit the value column only. Blank value = keep the built-in default. Write 'none' to empty a list. Unknown keys are rejected.
 section,key,value,unit,description
-Business targets,SAVINGS_TARGET_MONTHLY_INR,,whole number,Monthly savings ambition in Rs. Gate C6 reports MEETS/BELOW against this. A verdict only — a smaller plan still executes. Blank = auto-derive as SAVINGS_TARGET_PCT_OF_SPEND x the observed monthly discount spend.
-Business targets,SAVINGS_TARGET_PCT_OF_SPEND,5.0,percent 0-100 (12 = 12%),"When no explicit ambition is set: the C6 bar as a percent of observed monthly discount spend. 5 = the low end of the 'brands waste 5-10% of their discount budget' claim — a bar the engine must earn, never one derived from its own findings."
 Business targets,TARGET_DISCOUNT_PCT,10.0,percent 0-100 (12 = 12%),Headline discount % the brand is steering toward (dashboard KPI).
 Business targets,TARGET_WEIGHTED_DISCOUNT_PCT,9.0,percent 0-100 (12 = 12%),Revenue-weighted portfolio discount % the flywheel glides toward.
 Business targets,TARGET_QUARTER,Q4 2026,text,"Quarter label the discount target is set for, e.g. Q4 2026."

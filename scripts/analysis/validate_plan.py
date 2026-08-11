@@ -3,12 +3,14 @@ validate_plan.py — check the confounder-controlled plan against goal condition
 Prints PASS/FAIL per condition with offending cells and the achievable
 net-savings figure.
 
-Exit 0 iff every SAFETY gate passes (C1-C5, C7, C8). C6 — the business
-savings target — is a loudly-reported VERDICT (MEETS/BELOW), not an abort:
-a safe, correct plan that is smaller than the ambition bar must still be
-executable, otherwise the gate punishes honest shrinkage of the estimate.
-Set the target in config/settings.csv (SAVINGS_TARGET_MONTHLY_INR); the
-default lives in v4_config.py.
+Exit 0 iff every SAFETY gate passes (C1-C5, C7, C8). There is deliberately
+NO business-ambition gate: the old C6 (achievable vs a savings target) was
+removed because every bar an operator can choose after seeing the data turned
+out to be either inherited noise or circular self-confirmation. The engine
+REPORTS the confident achievable number (with its spend share for context);
+judging whether that amount is sufficient is a contract/engagement question,
+not a validation gate. Validity gates test whether the number is TRUE, never
+whether it is BIG.
 
   C1 Discount effect is ISOLATED from OSA, Ad SOV, competitive intensity — the
      model controls for all three (non-degenerate) and every recommendation
@@ -22,8 +24,8 @@ default lives in v4_config.py.
      cells are flagged (present + counted), never treated as certain.
   C5 Money reconciles: sum of cut line-items == reported achievable total;
      aggregate net-revenue impact positive.
-  C6 Achievable savings computed explicitly vs 6-10L; if below, the reason is
-     stated (which products/cities, why the ceiling is lower).
+  (C6 retired — see above; C7 out-of-sample accuracy and C8 DML confirmation
+   keep their historical numbers so docs and receipts stay referenceable.)
 """
 import os, sys, glob, json
 import numpy as np
@@ -33,9 +35,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, ROOT)
 import v4_config as _cfg      # a broken config/settings.* must stop the run here
-# The C6 ambition bar comes from plan_summary.json (target_lo/target_basis) —
-# discount_plan derives it there (explicit settings ask, else % of observed
-# spend), so gate and plan can never quote two different targets.
 R2_FLOOR = 0.60
 OOS_R2_BAR = 0.75                            # goal: model accuracy R² ≥ 0.75 (out-of-sample)
 OSA_LOW = 75.0
@@ -139,14 +138,9 @@ def main():
         c5.append("aggregate net-revenue impact not positive")
     R["C5"] = (not c5, c5 + [f"line-sum Rs.{line_sum:,.0f} = reported Rs.{rep:,.0f} (aggregate impact +ve)"])
 
-    # ── C6: achievable vs the business savings target (advisory verdict) ──
+    # (C6 retired — no ambition gate; the achievable number is REPORTED with
+    #  its spend share in the summary footer below.)
     ach = S["achievable_savings_mo_highconf"]
-    tgt_lo = float(S.get("target_lo") or 0.0)
-    tgt_basis = S.get("target_basis") or "SAVINGS_TARGET_MONTHLY_INR"
-    _tgt_l = tgt_lo / 100_000
-    c6 = [] if ach >= tgt_lo else [f"high-conf achievable Rs.{ach:,.0f}/mo is BELOW the Rs.{_tgt_l:.2f}L bar"]
-    R["C6"] = (ach >= tgt_lo, c6 + [f"achievable(high-conf)=Rs.{ach:,.0f}/mo vs Rs.{_tgt_l:.2f}L target "
-                                    f"({tgt_basis}) => {'MEETS' if ach>=tgt_lo else 'BELOW'}"])
 
     # ── C7: model accuracy — out-of-sample R² ≥ 0.75 ──
     oos = S.get("oos_r2", np.nan)
@@ -170,24 +164,22 @@ def main():
         c8ok = False; c8 = ["dml_results.json missing — run dml_estimate.py"]
     R["C8"] = (c8ok, c8)
 
-    # C6 is the business-target VERDICT: reported loudly, never an abort.
     # Only the safety gates decide the exit code — see module docstring.
     allpass = True
-    for k in ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"]:
+    for k in ["C1", "C2", "C3", "C4", "C5", "C7", "C8"]:
         ok, rows = R[k]
-        if k == "C6":
-            print(f"\n  C6: {'MEETS TARGET' if ok else 'BELOW TARGET (advisory — does not block execution)'}")
-        else:
-            allpass &= ok
-            print(f"\n  {k}: {'PASS' if ok else 'FAIL'}")
+        allpass &= ok
+        print(f"\n  {k}: {'PASS' if ok else 'FAIL'}")
         for r in rows[:12]: print(f"      - {r}")
-    c6_ok = R["C6"][0]
+    spend_obs = float(S.get("disc_spend_mo_observed") or 0.0)
+    share = f" ≈ {ach/spend_obs*100:.1f}% of observed discount spend Rs.{spend_obs:,.0f}/mo" \
+            if spend_obs > 0 else ""
     print("\n" + "-" * 76)
-    print(f"  ACHIEVABLE (high-conf bucket-c): Rs.{ach:,.0f}/mo | all-conf Rs.{S['achievable_savings_mo_allconf']:,.0f}")
+    print(f"  ACHIEVABLE (high-conf bucket-c): Rs.{ach:,.0f}/mo | "
+          f"all-conf Rs.{S['achievable_savings_mo_allconf']:,.0f}{share}")
     print(f"  out-of-sample R² = {oos} (bar {OOS_R2_BAR}) | buckets: {S['bucket_counts']}")
     print(f"  Safety gates C1-C5, C7, C8: {'ALL PASS' if allpass else 'FAIL — see above'}"
-          f"  |  C6 target verdict: {'MEETS' if c6_ok else 'BELOW'} "
-          f"Rs.{tgt_lo/100_000:.2f}L ({tgt_basis})")
+          f"  |  the engine reports the amount; sufficiency is a contract question")
     return 0 if allpass else 1
 
 

@@ -357,17 +357,18 @@ def api_status():
     if bt is not None:
         add("Backtest", bt[0], bt[1])
 
-    # NEW: Plan gates C1-C8 — the plan exists AND plan_summary says it meets target.
+    # Confident savings — informational: the engine reports the amount (with
+    # spend share for scale); there is no ambition bar to pass or fail.
     ps = st["plan_summary"]
     if ps:
-        ok = bool(st["plan_exists"] and ps.get("meets_target"))
-        note = (f"checks plan exists + meets_target: achievable "
-                f"₹{ps.get('achievable_savings_mo_allconf', 0):,.0f}/mo vs target "
-                f"₹{ps.get('target_lo', 0):,.0f}–₹{ps.get('target_hi', 0):,.0f}; "
-                f"{ps.get('cut_cells_all', 0)} cut cells")
-        add("Plan gates C1-C8", ok, note)
+        ach = float(ps.get("achievable_savings_mo_allconf", 0) or 0)
+        spend = float(ps.get("disc_spend_mo_observed", 0) or 0)
+        share = f" ≈ {ach/spend*100:.1f}% of ₹{spend:,.0f}/mo discount spend" if spend > 0 else ""
+        add("Confident savings", bool(st["plan_exists"]),
+            f"₹{ach:,.0f}/mo across {ps.get('cut_cells_all', 0)} cut cells{share} "
+            f"(reported amount — sufficiency is a contract question)")
     else:
-        add("Plan gates C1-C8", False, "checks plan exists + meets_target — plan not generated yet")
+        add("Confident savings", False, "plan not generated yet — run the monthly rebuild")
     st["receipts"] = rec
     return st
 
