@@ -33,8 +33,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, ROOT)
 import v4_config as _cfg      # a broken config/settings.* must stop the run here
-TARGET_LO = getattr(_cfg, "SAVINGS_TARGET_MONTHLY_INR", 500_000)
-TARGET_HI = 1_000_000
+# The C6 ambition bar comes from plan_summary.json (target_lo/target_basis) —
+# discount_plan derives it there (explicit settings ask, else % of observed
+# spend), so gate and plan can never quote two different targets.
 R2_FLOOR = 0.60
 OOS_R2_BAR = 0.75                            # goal: model accuracy R² ≥ 0.75 (out-of-sample)
 OSA_LOW = 75.0
@@ -140,10 +141,12 @@ def main():
 
     # ── C6: achievable vs the business savings target (advisory verdict) ──
     ach = S["achievable_savings_mo_highconf"]
-    _tgt_l = TARGET_LO / 100_000
-    c6 = [] if ach >= TARGET_LO else [f"high-conf achievable Rs.{ach:,.0f}/mo is BELOW the Rs.{_tgt_l:.1f}L target"]
-    R["C6"] = (ach >= TARGET_LO, c6 + [f"achievable(high-conf)=Rs.{ach:,.0f}/mo vs Rs.{_tgt_l:.1f}L target => "
-                                       f"{'MEETS' if ach>=TARGET_LO else 'BELOW'}"])
+    tgt_lo = float(S.get("target_lo") or 0.0)
+    tgt_basis = S.get("target_basis") or "SAVINGS_TARGET_MONTHLY_INR"
+    _tgt_l = tgt_lo / 100_000
+    c6 = [] if ach >= tgt_lo else [f"high-conf achievable Rs.{ach:,.0f}/mo is BELOW the Rs.{_tgt_l:.2f}L bar"]
+    R["C6"] = (ach >= tgt_lo, c6 + [f"achievable(high-conf)=Rs.{ach:,.0f}/mo vs Rs.{_tgt_l:.2f}L target "
+                                    f"({tgt_basis}) => {'MEETS' if ach>=tgt_lo else 'BELOW'}"])
 
     # ── C7: model accuracy — out-of-sample R² ≥ 0.75 ──
     oos = S.get("oos_r2", np.nan)
@@ -184,8 +187,7 @@ def main():
     print(f"  out-of-sample R² = {oos} (bar {OOS_R2_BAR}) | buckets: {S['bucket_counts']}")
     print(f"  Safety gates C1-C5, C7, C8: {'ALL PASS' if allpass else 'FAIL — see above'}"
           f"  |  C6 target verdict: {'MEETS' if c6_ok else 'BELOW'} "
-          f"Rs.{TARGET_LO/100_000:.1f}L (SAVINGS_TARGET_MONTHLY_INR — set it in "
-          f"config/settings.csv)")
+          f"Rs.{tgt_lo/100_000:.2f}L ({tgt_basis})")
     return 0 if allpass else 1
 
 

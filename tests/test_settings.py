@@ -213,6 +213,12 @@ def test_xlsx_template_round_trips_every_registry_key(cfgdir):
     import v4_config as cfg
     for key, typ, _s, _d in sl.REGISTRY:
         live = getattr(cfg, key)
+        if live is None:
+            # A None default means "auto-derive" (e.g. SAVINGS_TARGET_MONTHLY_INR):
+            # the template correctly writes a BLANK cell, and blank round-trips
+            # to "not overridden" — the key must NOT appear in the applied set.
+            assert key not in applied, key
+            continue
         if isinstance(live, (list, tuple)):
             assert applied.get(key, []) == list(live), key
         elif typ == "integer":

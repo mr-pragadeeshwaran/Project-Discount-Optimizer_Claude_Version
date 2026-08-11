@@ -52,17 +52,10 @@ CAT_R2_FLOOR     = 0.60    # category model must clear this (full model, incl. F
 BADGE_BETA_FLOOR = 0.0     # discount coef must be >0 to have a finite break-even
 TREND_FLAT_BAND  = 0.05    # |recent/early - 1| <= 5% => flat
 MATERIAL_CONTRIB = 0.05    # a confounder must move >=5% of log-units to "explain" a cell
-# C6 business-ambition band, from settings — ONE ambition number everywhere
-# (SAVINGS_TARGET_MONTHLY_INR; validate_plan's C6 quotes the same knob).
-# LO = the ambition itself, HI = 2x it: landing ABOVE double the ask reads
-# "recheck assumptions", not success. (Was hardcoded 6-10L — the original
-# 24 Mantra engagement bracket, a client constant that had leaked into code.)
-try:
-    import v4_config as _cfg_amb
-    _AMBITION = float(getattr(_cfg_amb, "SAVINGS_TARGET_MONTHLY_INR", 500_000) or 500_000)
-except Exception:
-    _AMBITION = 500_000.0
-TARGET_LO, TARGET_HI = _AMBITION, 2.0 * _AMBITION
+# C6 business-ambition band: derived in main() once the panel's observed
+# discount spend is known — an explicit SAVINGS_TARGET_MONTHLY_INR from
+# settings wins; otherwise SAVINGS_TARGET_PCT_OF_SPEND × observed spend.
+# Never derived from the engine's own findings (that would be circular).
 
 
 def _latest_facttable():
@@ -568,6 +561,25 @@ def main():
     rein.to_csv(os.path.join(outdir, "reinvest_list.csv"), index=False)
     df.to_csv(os.path.join(outdir, "all_cells.csv"), index=False)
 
+    # ── C6 ambition band — ONE external bar, never set from our own findings
+    # (a bar equal to the answer makes the gate a tautology). An explicit
+    # client ask in settings wins; otherwise anchor to the INPUT side of the
+    # data: a % of the observed monthly discount spend (default 5%, the low
+    # end of the "brands waste 5-10% of discount budget" claim).
+    import v4_config as cfg
+    spend_mo = float(pd.to_numeric(df["disc_spend_mo"], errors="coerce")
+                     .fillna(0).clip(lower=0).sum())
+    _amb = getattr(cfg, "SAVINGS_TARGET_MONTHLY_INR", None)
+    if _amb:
+        target_lo = float(_amb)
+        target_basis = "set in settings (SAVINGS_TARGET_MONTHLY_INR)"
+    else:
+        _pct = float(getattr(cfg, "SAVINGS_TARGET_PCT_OF_SPEND", 5.0) or 5.0)
+        target_lo = _pct / 100.0 * spend_mo
+        target_basis = (f"auto: {_pct:g}% of observed discount spend "
+                        f"Rs.{spend_mo:,.0f}/mo")
+    target_hi = 2.0 * target_lo
+
     counts = df["bucket"].value_counts().to_dict()
     summary = {
         "run": os.path.basename(run), "formula": formula,
@@ -581,8 +593,10 @@ def main():
         "achievable_savings_mo_allconf": achievable_all,
         "cut_cells_high": int(len(cut_hi)), "cut_cells_experimental": int(len(cut_exp)),
         "cut_cells_all": int(len(cut)), "reinvest_cells": int(len(rein)),
-        "target_lo": TARGET_LO, "target_hi": TARGET_HI,
-        "meets_target": bool(TARGET_LO <= achievable <= TARGET_HI),
+        "target_lo": round(target_lo), "target_hi": round(target_hi),
+        "target_basis": target_basis,
+        "disc_spend_mo_observed": round(spend_mo),
+        "meets_target": bool(target_lo <= achievable <= target_hi),
         "models": {k: {kk: (round(vv, 4) if isinstance(vv, float) else vv)
                        for kk, vv in v.items()} for k, v in models.items()},
     }
@@ -591,8 +605,8 @@ def main():
     print(f"\n[plan] buckets: " + " | ".join(f"{k}={v}" for k, v in sorted(counts.items())))
     print(f"[plan] ACHIEVABLE net savings (high-conf bucket-c): Rs.{achievable:,.0f}/mo "
           f"(all-conf Rs.{achievable_all:,.0f})")
-    print(f"[plan] vs Rs.{TARGET_LO/1e5:g}-{TARGET_HI/1e5:g}L target: "
-          f"{'MEETS' if summary['meets_target'] else 'BELOW' if achievable<TARGET_LO else 'ABOVE'}")
+    print(f"[plan] vs Rs.{target_lo/1e5:.2g}-{target_hi/1e5:.2g}L target ({target_basis}): "
+          f"{'MEETS' if summary['meets_target'] else 'BELOW' if achievable<target_lo else 'ABOVE'}")
     print(f"[plan] outputs -> {outdir}")
     return summary
 
