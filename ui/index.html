@@ -1889,6 +1889,7 @@ const REPORT_DEFS = [
   ['promo',    'Promo calendar',     'When should each promo run over the next 12 weeks?'],
   ['chal',     'Challenger report',  'Does competitor pressure explain the waste instead?'],
   ['budget',   'Budget plan',        'Where does each rupee of trade spend earn its keep?'],
+  ['glide',    'Budget glide ladder','If the discount budget moves ±2–10%, what happens to sales?'],
   ['params',   'Parameter review',   'Which decision knobs changed since the last sign-off?'],
   ['egates',   'Elasticity gates',   'Do the elasticities clear the 3-stage acceptance bar?'],
 ];
@@ -1896,16 +1897,17 @@ const REPORT_EMPTY = {
   readout: 'weekly step A — Recommend', backtest: 'step 10 — Rolling backtest',
   sens: 'step 12 — Sensitivity shake', promo: 'step 8 — Promo calendar',
   chal: 'step 5 — Competitor challenger', budget: 'step 7 — Budget allocator',
+  glide: 'step 9b — Budget glide ladder',
   params: 'Governance — Parameter review', egates: 'step 11 — Elasticity gates',
 };
 const REP = { open: null, cache: {} };
 
 const REPORT_ICON = {
   readout: IC.flag, backtest: IC.clock, sens: IC.shield, promo: IC.target,
-  chal: IC.scissors, budget: IC.wallet, params: IC.scale, egates: IC.grid,
+  chal: IC.scissors, budget: IC.wallet, glide: IC.wallet, params: IC.scale, egates: IC.grid,
 };
 const REPORT_HUE = { readout: 'hc1', backtest: 'hc3', sens: 'hc4', promo: 'hc2',
-  chal: 'hc2', budget: 'hc5', params: 'hc6', egates: 'hc4' };
+  chal: 'hc2', budget: 'hc5', glide: 'hc3', params: 'hc6', egates: 'hc4' };
 function renderReports() {
   $('#rep-grid').innerHTML = REPORT_DEFS.map(r =>
     '<button class="rep-card' + (REP.open === r[0] ? ' on' : '') + '" data-report="' + r[0] + '"' +

@@ -58,6 +58,9 @@ STEPS = {
     "scenarios":     {"group": "monthly", "label": "9. Scenario menu",
                       "desc": "A negotiation menu: revenue-max vs profit-max vs tight/loose plans.",
                       "cmd": ["scripts/pricing/scenario_menu.py"]},
+    "glide":         {"group": "monthly", "label": "9b. Budget glide ladder",
+                      "desc": "If the discount budget moves ±2–10%, projected sales impact — uniform vs smart allocation.",
+                      "cmd": ["scripts/pricing/budget_glide.py"]},
     "backtest":      {"group": "monthly", "label": "10. Rolling backtest",
                       "desc": "Walk-forward test of the champion vs naive benchmarks.",
                       "cmd": ["scripts/validation/backtest_rolling.py"]},
@@ -87,7 +90,7 @@ STEPS = {
                       "cmd": ["scripts/tracker/params_review.py"]},
 }
 MONTHLY_ORDER = ["pipeline", "champion", "dml", "gates", "challenger", "pricing",
-                 "budget", "promo", "scenarios", "backtest", "elast_gates",
+                 "budget", "promo", "scenarios", "glide", "backtest", "elast_gates",
                  "sensitivity", "outlier_audit"]
 
 # ── Job runner: one job at a time, log + progress kept in memory ────────────────
@@ -533,6 +536,7 @@ def api_table(name):
 REPORTS = {
     "readout":  os.path.join("output", "DISCOUNT_PLAN", "WEEKLY_READOUT.md"),
     "budget":   os.path.join("output", "DISCOUNT_PLAN", "pricing", "BUDGET_PLAN.md"),
+    "glide":    os.path.join("output", "DISCOUNT_PLAN", "pricing", "BUDGET_GLIDE.md"),
     "backtest": os.path.join("output", "DISCOUNT_PLAN", "validation", "BACKTEST_REPORT.md"),
     "sens":     os.path.join("output", "DISCOUNT_PLAN", "validation", "SENSITIVITY_REPORT.md"),
     "promo":    os.path.join("output", "DISCOUNT_PLAN", "promo", "PROMO_CALENDAR.md"),
