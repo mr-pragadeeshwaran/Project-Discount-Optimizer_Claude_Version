@@ -281,6 +281,8 @@ def s04_drivers(wb, M):
     ws = wb.create_sheet("04 Driver Analysis (Stage 1)")
     r = _headline(ws, 1, "(Stage 1: Discount Response) 60 Percent Of Cells Are Availability "
                          "Constrained, Making Stock The Largest Recoverable Lever", 1)
+    ws.cell(2, 1, T("Full per cell detail: sheet 'Stage 1 Discount Response'")
+            ).font = F(9, italic=True, color=ACCENT)
     r += 1
     r = _headline(ws, r, "The Driver Tree", 2)
     for line in [
@@ -317,6 +319,8 @@ def s05_opportunity(wb, M):
     ws = wb.create_sheet("05 Opportunity (Stage 3)")
     r = _headline(ws, 1, "(Stage 3: Promotion ROI) Fifteen Cells Hold 99 Percent Of The "
                          "Testable Opportunity", 1)
+    ws.cell(2, 1, T("Full per cell detail: sheet 'Stage 3 Promotion ROI'")
+            ).font = F(9, italic=True, color=ACCENT)
     r += 1
     r = _headline(ws, r, "The Value Staircase (Each Step Has A Higher Evidence Bar Below It)", 2)
     stake = M["stake_mo"]
@@ -388,6 +392,8 @@ def s07_recos(wb, M):
     ws = wb.create_sheet("07 Recommendations (Stage 2)")
     r = _headline(ws, 1, "(Stage 2: Optimal Discount) Five Moves, Prioritized By Impact "
                          "Against Effort", 1)
+    ws.cell(2, 1, T("Full per cell detail: sheet 'Stage 2 Optimal Discount'")
+            ).font = F(9, italic=True, color=ACCENT)
     r += 1
     rows = [
         ["Execute the Monday sheet", "Rs 90,402 per month is proven waste", "P1", "KAM", "Immediate", "Rs 90,402 per month", "Low", "Quick Win"],
@@ -527,6 +533,20 @@ def s11_method(wb, M, run):
     ws.sheet_view.showGridLines = False
 
 
+def _scrub_dashes(wb):
+    """The detailed stage sheets are built by the stage-report module, whose
+    house strings contain em dashes; this workbook's language rule bans them,
+    so scrub every title and cell before the final assertion."""
+    for ws in wb.worksheets:
+        if "—" in ws.title or "–" in ws.title:
+            ws.title = " ".join(ws.title.replace("—", " ").replace("–", " ").split())
+        for row in ws.iter_rows():
+            for c in row:
+                if isinstance(c.value, str) and ("—" in c.value or "–" in c.value):
+                    c.value = c.value.replace(" — ", ", ").replace("—", ", ") \
+                                     .replace("–", " to ")
+
+
 def _assert_no_dashes(wb):
     bad = []
     for ws in wb.worksheets:
@@ -552,9 +572,16 @@ def main():
     s06_scenarios(wb, M)
     s07_recos(wb, M)
     s08_action(wb, M)
+    # The detailed three-stage sheets (per cell), identical tables to the
+    # stage report, kept by owner request: the executive layer summarizes,
+    # these sheets carry the full proof at SKU x city grain.
+    bsw.sheet_stage1(wb, M["d"])
+    bsw.sheet_stage2(wb, M["d"])
+    bsw.sheet_stage3(wb, M["d"])
     s09_data(wb, M)
     s10_calc(wb, M)
     s11_method(wb, M, run)
+    _scrub_dashes(wb)
     _assert_no_dashes(wb)
     wb.save(out)
     print(f"[exec-workbook] {M['n_cells']} cells | waste {M['waste_mo']:,.0f} | "
