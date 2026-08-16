@@ -23,6 +23,7 @@ Run:  python -X utf8 scripts/reports/build_stage_workbook.py
 Out:  output/STATIQ_STAGE_REPORT.xlsx
 """
 import glob
+import json
 import os
 import sys
 
@@ -81,6 +82,27 @@ def load_joined(run):
             "confidence_tier", "phasing_plan"]
     rec = rec[[c for c in keep if c in rec.columns]]
     d = ac.merge(rec, on="cell_id", how="left")
+
+    # Per-cell elasticity + uncertainty + fit, straight from stage 4's table.
+    ee_path = os.path.join(run, "elasticity_estimates.csv")
+    if os.path.exists(ee_path):
+        ee = pd.read_csv(ee_path)
+        ee_keep = ["cell_id", "price_elasticity", "price_elasticity_se",
+                   "price_elasticity_lower", "price_elasticity_upper",
+                   "cell_train_r2", "cell_test_r2", "n_train",
+                   "disc_pct_std", "n_discount_levels"]
+        d = d.merge(ee[[c for c in ee_keep if c in ee.columns]],
+                    on="cell_id", how="left")
+
+    # Second engine's independent elasticity (Bayesian-shrunk own-price).
+    el_path = os.path.join(ROOT, "output", "DISCOUNT_PLAN", "pricing", "elasticities.csv")
+    if os.path.exists(el_path):
+        el = pd.read_csv(el_path)
+        el["pid"] = el["product_id"].map(_clean_pid)
+        d["pid"] = d["product_id"].map(_clean_pid)
+        d = d.merge(el[["pid", "city", "own_elast", "own_sd", "low_confidence"]]
+                    .rename(columns={"low_confidence": "engine2_low_conf"}),
+                    on=["pid", "city"], how="left")
 
     pr_path = os.path.join(ROOT, "output", "DISCOUNT_PLAN", "pricing", "pricing_reco.csv")
     if os.path.exists(pr_path):
@@ -279,6 +301,80 @@ def sheet_stage3(wb, d):
                  fmts, verdict_col=14)
 
 
+def sheet_elasticity(wb, d):
+    ws = wb.create_sheet("Elasticity & Accuracy")
+    dd = d.sort_values(["title", "city"])
+    headers = ["product_id", "cell_id", "Product", "Pack", "City", "Category",
+               "Price elasticity", "95% CI low", "95% CI high",
+               "2nd-engine elasticity (independent)", "2nd-engine SD",
+               "Weeks of data", "Training days", "Discount variation (ppt std)",
+               "Distinct discount levels", "Fit at decision grain (R²)",
+               "Held-out R² (where measurable)", "Confidence score (0-100)",
+               "Confidence tier"]
+    rows = []
+    for _, r in dd.iterrows():
+        rows.append([
+            r["product_id"], r["cell_id"], str(r["title"])[:38],
+            r.get("grammage", ""), r["city"], r["category"],
+            round(float(r["price_elasticity"]), 2) if pd.notna(r.get("price_elasticity")) else None,
+            round(float(r["price_elasticity_lower"]), 2) if pd.notna(r.get("price_elasticity_lower")) else None,
+            round(float(r["price_elasticity_upper"]), 2) if pd.notna(r.get("price_elasticity_upper")) else None,
+            round(float(r["own_elast"]), 2) if pd.notna(r.get("own_elast")) else None,
+            round(float(r["own_sd"]), 2) if pd.notna(r.get("own_sd")) else None,
+            r.get("n_weeks"),
+            int(r["n_train"]) if pd.notna(r.get("n_train")) else None,
+            round(float(r["disc_pct_std"]), 1) if pd.notna(r.get("disc_pct_std")) else None,
+            int(r["n_discount_levels"]) if pd.notna(r.get("n_discount_levels")) else None,
+            round(float(r["cell_train_r2"]), 2) if pd.notna(r.get("cell_train_r2")) else None,
+            round(float(r["cell_test_r2"]), 2) if pd.notna(r.get("cell_test_r2")) else None,
+            round(float(r["confidence_score"]), 0) if pd.notna(r.get("confidence_score")) else None,
+            r.get("confidence_tier", ""),
+        ])
+    _write_table(ws, "Elasticity & Accuracy — the number and how much to trust it, per cell",
+                 "Two INDEPENDENT elasticity estimates per cell (pipeline + pricing "
+                 "engine) with confidence intervals. Thin cells are shrunk toward their "
+                 "category median — that is honesty, not weakness. Accuracy is layered: "
+                 "cell confidence score → category fit → portfolio receipts (Summary).",
+                 headers, rows,
+                 [10, 22, 30, 9, 12, 15, 9, 8, 8, 11, 9, 7, 8, 10, 9, 10, 10, 10, 12], {})
+
+
+def _accuracy_receipts(run):
+    """Portfolio-level accuracy receipts, loaded defensively from the artifacts."""
+    out = []
+    try:
+        S = json.load(open(os.path.join(run, "plan", "plan_summary.json"), encoding="utf-8"))
+        out.append(("Out-of-sample R² (champion, temporal holdout)",
+                    f"{S.get('oos_r2')}  ({S.get('oos_cats_pass')}/{S.get('oos_cats_total')} categories ≥ 0.75)"))
+    except Exception:
+        pass
+    try:
+        ev = json.load(open(os.path.join(ROOT, "output", "DISCOUNT_PLAN", "validation",
+                                         "elasticity_validation.json"), encoding="utf-8"))
+        s1 = ev.get("stage1", {})
+        out.append(("Elasticity gates (3-stage acceptance)",
+                    f"{'ALL PASS' if ev.get('overall_pass', ev.get('all_pass')) else 'CHECK'} — "
+                    f"holdout R² {s1.get('r2_log_holdout')}, wMAPE {s1.get('wmape_units')}, "
+                    f"bias {s1.get('abs_bias_units')}"))
+    except Exception:
+        pass
+    try:
+        dml = json.load(open(os.path.join(run, "plan", "dml_results.json"), encoding="utf-8"))
+        n_w = sum(1 for r in dml if r.get("waste"))
+        out.append(("Double ML causal confirmation (independent method)",
+                    f"{n_w}/{len(dml)} cut categories confirmed reliably-waste"))
+    except Exception:
+        pass
+    try:
+        sc = pd.read_csv(os.path.join(ROOT, "output", "DISCOUNT_PLAN", "validation",
+                                      "sensitivity_cells.csv"))
+        out.append(("Sensitivity (200 joint shakes of assumptions)",
+                    f"{int(sc['fragile'].sum())} fragile of {len(sc)} cut cells"))
+    except Exception:
+        pass
+    return out
+
+
 def sheet_summary(wb, d, run):
     ws = wb.create_sheet("Portfolio Summary", 1)
     ws.cell(1, 1, "Portfolio Summary — the whole story on one sheet").font = F(14, True, INK)
@@ -310,6 +406,11 @@ def sheet_summary(wb, d, run):
         c.font = F(11, bold=True, color=INK)
         c.number_format = "#,##0"
     r0 += len(facts) + 2
+    ws.cell(r0, 1, "MODEL ACCURACY — THE RECEIPTS").font = F(11, True, INK)
+    for i, (k, v) in enumerate(_accuracy_receipts(run), 1):
+        ws.cell(r0 + i, 1, k).font = F(10)
+        ws.cell(r0 + i, 2, v).font = F(10, bold=True, color=INK)
+    r0 += len(_accuracy_receipts(run)) + 3
     ws.cell(r0, 1, "By category").font = F(11, True, INK)
     g = (d.groupby("category")
          .agg(cells=("cell_id", "count"),
@@ -358,6 +459,20 @@ def sheet_readme(wb):
         ("(floor→today). ROI < 1 = the discount costs more than the revenue it brings.", 9, False),
         ("'Marginal ROI' asks the same at the margin: does the LAST point pay?", 9, False),
         ("", 9, False),
+        ("WHEN THE BRAND ASKS: 'WHAT'S THE ELASTICITY, AND HOW ACCURATE IS IT?'", 11, True),
+        ("Elasticity per SKU x city: open 'Elasticity & Accuracy' — quote the price", 9, False),
+        ("elasticity WITH its 95% CI, and note the second, independently-estimated", 9, False),
+        ("engine's number beside it (two methods, same story = the trust argument).", 9, False),
+        ("Accuracy is answered in three layers, smallest to largest:", 9, False),
+        ("  1. Per cell — the Confidence score (0-100): data density, price variation,", 9, False),
+        ("     fit, plausibility and CI tightness combined. We ACT only on High.", 9, False),
+        ("  2. Per category — model fit R2 at the grain decisions are made.", 9, False),
+        ("  3. Portfolio — the receipts on the Summary sheet: out-of-sample R2,", 9, False),
+        ("     3-stage elasticity gates, Double ML confirmation, sensitivity shakes.", 9, False),
+        ("A single per-cell daily R2 is deliberately NOT the headline: daily units of", 9, False),
+        ("one SKU in one city are noise-dominated; the honest per-cell trust measure", 9, False),
+        ("is the confidence score, and the honest accuracy proof is out-of-sample.", 9, False),
+        ("", 9, False),
         ("HONESTY NOTES — READ BEFORE QUOTING", 11, True),
         ("1. Every number is OBSERVABLE — units, prices, revenue, discount spend. No cost", 9, False),
         ("   assumptions (COGS/commission) enter any figure in this workbook.", 9, False),
@@ -384,6 +499,7 @@ def main():
     sheet_stage1(wb, d)
     sheet_stage2(wb, d)
     sheet_stage3(wb, d)
+    sheet_elasticity(wb, d)
     wb.save(OUT_XLSX)
     print(f"[stage-report] wrote {OUT_XLSX}")
 

@@ -292,9 +292,14 @@ def api_status():
         rec.append({"name": name, "ok": bool(ok), "note": note})
 
     def _dml():
-        return json.load(open(os.path.join(ROOT, "output", "DISCOUNT_PLAN", "dml_results.json"), encoding="utf-8"))
-    if _safe(_dml):
-        add("Double ML", True, "causal confirmation present")
+        # Read from the CURRENT run's plan dir — a top-level copy proved able
+        # to go stale across engagements and show a previous client's verdict.
+        d = json.load(open(os.path.join(run, "plan", "dml_results.json"), encoding="utf-8"))
+        n_w = sum(1 for r in d if r.get("waste"))
+        return f"{n_w}/{len(d)} cut categories confirmed reliably-waste (this run)"
+    _dml_note = _safe(_dml) if run else None
+    if _dml_note:
+        add("Double ML", True, _dml_note)
 
     def _egates():
         g = json.load(open(os.path.join(ROOT, "output", "DISCOUNT_PLAN", "validation", "elasticity_validation.json"), encoding="utf-8"))
