@@ -38,8 +38,24 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, ROOT)
 import v4_config as cfg
 
-OUT_XLSX = os.path.join(ROOT, "output", "STATIQ_STAGE_REPORT.xlsx")
 MONTH = 30.0 / 7.0
+
+
+def _next_versioned_out():
+    """Delivered files are immutable history: never overwrite an existing
+    version — each build writes STATIQ_STAGE_REPORT_v<N+1>.xlsx. The original
+    unversioned file counts as v1."""
+    import re
+    base = os.path.join(ROOT, "output")
+    n_max = 1 if os.path.exists(os.path.join(base, "STATIQ_STAGE_REPORT.xlsx")) else 0
+    for f in glob.glob(os.path.join(base, "STATIQ_STAGE_REPORT_v*.xlsx")):
+        m = re.search(r"_v(\d+)\.xlsx$", f)
+        if m:
+            n_max = max(n_max, int(m.group(1)))
+    return os.path.join(base, f"STATIQ_STAGE_REPORT_v{n_max + 1}.xlsx")
+
+
+OUT_XLSX = None   # resolved at run time (auto-versioned) unless overridden via argv
 
 # ── house style ─────────────────────────────────────────────────────────────
 INK, BODY, MUTED = "0F172A", "334155", "64748B"
@@ -489,9 +505,13 @@ def sheet_readme(wb):
 
 
 def main():
+    global OUT_XLSX
+    if OUT_XLSX is None:
+        OUT_XLSX = _next_versioned_out()
     run = _latest_run()
     d = load_joined(run)
-    print(f"[stage-report] run {os.path.basename(run)} | {len(d)} cells")
+    print(f"[stage-report] run {os.path.basename(run)} | {len(d)} cells -> "
+          f"{os.path.basename(OUT_XLSX)}")
     wb = Workbook()
     wb.remove(wb.active)
     sheet_readme(wb)
