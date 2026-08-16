@@ -278,9 +278,9 @@ def s03_performance(wb, M):
 
 
 def s04_drivers(wb, M):
-    ws = wb.create_sheet("04 Driver Analysis")
-    r = _headline(ws, 1, "60 Percent Of Cells Are Availability Constrained, Making Stock The "
-                         "Largest Recoverable Lever", 1)
+    ws = wb.create_sheet("04 Driver Analysis (Stage 1)")
+    r = _headline(ws, 1, "(Stage 1: Discount Response) 60 Percent Of Cells Are Availability "
+                         "Constrained, Making Stock The Largest Recoverable Lever", 1)
     r += 1
     r = _headline(ws, r, "The Driver Tree", 2)
     for line in [
@@ -314,8 +314,9 @@ def s04_drivers(wb, M):
 
 
 def s05_opportunity(wb, M):
-    ws = wb.create_sheet("05 Opportunity Analysis")
-    r = _headline(ws, 1, "Fifteen Cells Hold 99 Percent Of The Testable Opportunity", 1)
+    ws = wb.create_sheet("05 Opportunity (Stage 3)")
+    r = _headline(ws, 1, "(Stage 3: Promotion ROI) Fifteen Cells Hold 99 Percent Of The "
+                         "Testable Opportunity", 1)
     r += 1
     r = _headline(ws, r, "The Value Staircase (Each Step Has A Higher Evidence Bar Below It)", 2)
     stake = M["stake_mo"]
@@ -384,8 +385,9 @@ def s06_scenarios(wb, M):
 
 
 def s07_recos(wb, M):
-    ws = wb.create_sheet("07 Recommendations")
-    r = _headline(ws, 1, "Five Moves, Prioritized By Impact Against Effort", 1)
+    ws = wb.create_sheet("07 Recommendations (Stage 2)")
+    r = _headline(ws, 1, "(Stage 2: Optimal Discount) Five Moves, Prioritized By Impact "
+                         "Against Effort", 1)
     r += 1
     rows = [
         ["Execute the Monday sheet", "Rs 90,402 per month is proven waste", "P1", "KAM", "Immediate", "Rs 90,402 per month", "Low", "Quick Win"],
