@@ -98,7 +98,7 @@ absolute path.
   the registry in `settings_loader.py`, and a line in `config/SETTINGS_TEMPLATE.xlsx`.
   Validation must fail loud.
 - **Docs:** engineer-facing docs go here (`docs/ENGINEERING/`); do not extend
-  `doc/legacy` or `doc/reference` — they are frozen history.
+  `docs/legacy` or `docs/reference` — they are frozen history.
 
 ## What deliberately does not exist
 

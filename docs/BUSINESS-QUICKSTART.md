@@ -106,4 +106,4 @@ confidential from the brand — no cost sheets, no strategy documents.
 | Client deliverables (versioned, never overwritten) | `output/STATIQ_STAGE_REPORT_v*.xlsx`, `output/WAVE*_KAM_SHEET_v*.xlsx` |
 | Weekly operational files | `output/DISCOUNT_PLAN/` |
 | The engine's code | `pipeline.py`, numbered `stage*` folders, `scripts/` |
-| This documentation | `docs/` (start here), deep library in `doc/` and `output/` |
+| This documentation | `docs/` (start here — deep library in `docs/reference/`, learning docs in `output/`) |

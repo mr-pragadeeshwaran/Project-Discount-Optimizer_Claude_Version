@@ -69,9 +69,9 @@ plan menu runs the day before a negotiation.
 
 The repo carries three layers of docs and two of them predate the Epigamia engagement:
 
-- `doc/legacy/` — entirely 24 Mantra era (e.g. `ARCHITECTURE.md` quotes 24 Mantra MAPE;
+- `docs/legacy/` — entirely 24 Mantra era (e.g. `ARCHITECTURE.md` quotes 24 Mantra MAPE;
   `COMPLETE_FLOW.md` walks "4 SKUs of 24 Mantra Organic … 11 cities").
-- Parts of `doc/reference/` — `OPERATIONS_MANUAL.md` and `COMPLETE_SYSTEM_GUIDE.md` are
+- Parts of `docs/reference/` — `OPERATIONS_MANUAL.md` and `COMPLETE_SYSTEM_GUIDE.md` are
   flagged in `docs/README.md` as "pinned to the earlier 24 Mantra engagement — read for
   mechanism, not for current numbers".
 - Additional stale spots found while auditing: `output/DISCOUNT_PLAN/PLAN.md` still
@@ -86,7 +86,7 @@ is the routing rule in `docs/README.md` (numbers only from the live dashboard an
 workbook), not cleanup.
 
 *Path out:* regenerate or delete `output/DISCOUNT_PLAN/PLAN.md`; fix the two lines in
-`scripts/README.md`; leave `doc/legacy` clearly labeled rather than deleted (it
+`scripts/README.md`; leave `docs/legacy` clearly labeled rather than deleted (it
 documents real decisions).
 
 ## 6. pandas FutureWarnings, silenced globally

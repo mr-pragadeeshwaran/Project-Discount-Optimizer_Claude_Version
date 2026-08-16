@@ -116,5 +116,5 @@ Safety is layered, and each layer is code, not policy prose:
 
 - `docs/BUSINESS/04-business-architecture.md` — the same system explained for the business owner.
 - `docs/BUSINESS/03-business-logic.md` — what the models estimate and why the gates exist.
-- `doc/reference/ARCHITECTURE_HANDBOOK.md` — a from-first-principles teaching handbook of this architecture. **Caution: it predates the Epigamia engagement** — it names 24 Mantra Organic as the brand and `v4_outputs/` as the run directory (now `output/runs/`, per `v4_config.OUTPUT_DIR`). Its layered explanations remain accurate; verify any concrete path or brand name against the code.
+- `docs/reference/ARCHITECTURE_HANDBOOK.md` — a from-first-principles teaching handbook of this architecture. **Caution: it predates the Epigamia engagement** — it names 24 Mantra Organic as the brand and `v4_outputs/` as the run directory (now `output/runs/`, per `v4_config.OUTPUT_DIR`). Its layered explanations remain accurate; verify any concrete path or brand name against the code.
 - Sibling `docs/TECHNICAL/` docs — per-layer deep dives (pipeline stages, analysis chain, dashboard internals, weekly loop).

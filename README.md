@@ -62,11 +62,11 @@ is what you run every week.
 | **`scripts/analysis/`** | **The decision model.** `discount_plan.py` (confounder model), `dml_estimate.py` (Double ML), `optimize_plan.py`, `validate_plan.py` (C1–C8 checks), `build_report.py` |
 | **`scripts/tracker/`** | **The weekly tracker.** `weekly_tracker.py` (orchestrator) + `guardrail.py`, `scorecard.py`, `seasonality.py`, `workbook.py` |
 | `scripts/diagnostics/`, `scripts/experiments/` | Analysis history / data-quality probes (catalogued in `scripts/README.md`) |
-| **`DISCOUNT_PLAN/`** | **Deliverables** — the plan, verdict, cut/reinvest lists, measurement spec, data gaps, and `WEEKLY_TRACKER.xlsx` |
-| `doc/` | Deeper design docs (ARCHITECTURE, MODEL, MODEL_LOGIC, FLYWHEEL, …) |
+| **`output/DISCOUNT_PLAN/`** | **Deliverables** — the plan, verdict, cut/reinvest lists, measurement spec, data gaps, and `WEEKLY_TRACKER.xlsx` |
+| `docs/` | Documentation home — business layer + technical layer + deep library; start at `docs/README.md` |
 | `tests/` | Test suite (`pytest -m "not slow"`) |
 | `input_data/` | Raw brand exports (git-ignored, proprietary) |
-| `v4_outputs/` | Per-run outputs (git-ignored) |
+| `output/runs/` | Per-run outputs (git-ignored) |
 | `archive/` | Local junk drawer — marketing, logs, superseded docs (git-ignored) |
 
 ---
@@ -116,5 +116,6 @@ python -X utf8 scripts/tracker/weekly_tracker.py --week W1 --date 2026-07-06
 - Fit is a *trust floor*, never the objective. The goal is correct cut/keep/reinvest
   decisions that grow net revenue — not a big headline number.
 
-Deeper reading: [`doc/`](doc/) (architecture & model logic), [`scripts/README.md`](scripts/README.md)
-(script catalogue), [`DISCOUNT_PLAN/`](DISCOUNT_PLAN/) (the deliverables).
+Deeper reading: [`docs/`](docs/) (start at `docs/README.md` — business + technical layers,
+plus the reference library), [`scripts/README.md`](scripts/README.md) (script catalogue),
+[`output/DISCOUNT_PLAN/`](output/DISCOUNT_PLAN/) (the deliverables).

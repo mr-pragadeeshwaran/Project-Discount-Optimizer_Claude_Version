@@ -25,14 +25,18 @@ and engineering-level pictures.
 
 ## The deep library (pre-existing)
 
-The repo carries an older, deeper teaching library that remains valuable:
+The older, deeper teaching library now lives inside this tree:
 
-- `doc/reference/ARCHITECTURE_HANDBOOK.md` — book-length architecture course
-  for a business owner. **Still-true concepts; some numbers predate Epigamia.**
-- `doc/reference/EXECUTION_PLAYBOOK.md` — every command, copy-pasteable.
-- `doc/reference/OPERATIONS_MANUAL.md` / `COMPLETE_SYSTEM_GUIDE.md` — end-to-end
+- [`reference/ARCHITECTURE_HANDBOOK.md`](reference/ARCHITECTURE_HANDBOOK.md) —
+  book-length architecture course for a business owner. **Still-true concepts;
+  some numbers predate Epigamia.**
+- [`reference/EXECUTION_PLAYBOOK.md`](reference/EXECUTION_PLAYBOOK.md) — every
+  command, copy-pasteable.
+- `reference/OPERATIONS_MANUAL.md` / `COMPLETE_SYSTEM_GUIDE.md` — end-to-end
   operations and statistics. **Pinned to the earlier 24 Mantra engagement** —
   read for mechanism, not for current numbers.
+- `legacy/` — frozen project history; `assets/` — teaching diagrams;
+  `pdf/` — the generated system-guide PDF.
 - `output/` learning docs (MASTERCLASS, FROM_ZERO, THE_8DIAL_DANCE, …) —
   the statistics taught from zero, on real cells.
 
