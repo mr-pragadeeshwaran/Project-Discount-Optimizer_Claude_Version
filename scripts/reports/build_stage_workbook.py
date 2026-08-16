@@ -22,6 +22,7 @@ to edit): no live formulas, so nothing can mis-recalculate downstream.
 Run:  python -X utf8 scripts/reports/build_stage_workbook.py
 Out:  output/STATIQ_STAGE_REPORT.xlsx
 """
+import datetime
 import glob
 import json
 import os
@@ -39,6 +40,20 @@ sys.path.insert(0, ROOT)
 import v4_config as cfg
 
 MONTH = 30.0 / 7.0
+
+# The engine's own hold gates (mirrored from scripts/analysis/discount_plan.py
+# so the unlock conditions we print are the conditions the engine enforces).
+try:
+    sys.path.insert(0, os.path.join(ROOT, "scripts", "analysis"))
+    import discount_plan as _dp
+    OSA_LOW, MIN_WEEKS, MIN_DISC_STD = _dp.OSA_LOW, _dp.MIN_WEEKS, _dp.MIN_DISC_STD
+    CAT_R2_FLOOR = _dp.CAT_R2_FLOOR
+except Exception:                                   # keep the workbook buildable alone
+    OSA_LOW, MIN_WEEKS, MIN_DISC_STD, CAT_R2_FLOOR = 75.0, 8, 1.5, 0.60
+
+WAVE_SIZE = 15          # cells per test wave — small enough to read weekly
+WAVE_GAP_WEEKS = 3      # each wave runs 2-3 weeks under the kill-switch
+KILL_SWITCH = "auto-revert if actual volume misses prediction >5% twice"
 
 
 def _next_versioned_out():
@@ -176,6 +191,56 @@ def load_joined(run):
             return "NOT WORKING — monitor (gates keep it out of the cut wave)"
         return "UNCERTAIN — monitor / test"
     d["verdict"] = d.apply(_verdict, axis=1)
+
+    # ── Hold classification: WHY is a cell not acting, and what unlocks it? ──
+    # Mirrors the engine's own gate order (bucket precedence, then quality
+    # gates) so every "HELD" row carries the specific missing evidence — a
+    # plan, not a refusal. test_candidate marks cells only a DESIGNED price
+    # test can unlock (they feed the Unlock Pipeline sheet).
+    today = datetime.date.today()
+
+    def _classify(r):
+        b = str(r.get("bucket", ""))
+        conf = str(r.get("confidence", ""))
+        osa = float(r.get("osa_mean") or 0)
+        n_wk = float(r.get("n_weeks") or 0)
+        dstd = float(r.get("disc_std") or 0)
+        if b == "c_waste_cut":
+            if conf == "High":
+                return ("ACTING — in this week's governed plan",
+                        "already in the KAM sheet", False)
+            return ("In the TEST QUEUE (experimental-tier cut)",
+                    f"2–3 week controlled test; {KILL_SWITCH}", True)
+        if b == "a_stock":
+            return (f"Availability-constrained (OSA {osa:.0f}% < {OSA_LOW:.0f}%)",
+                    "raise availability — the cell re-enters pricing automatically "
+                    "next run; its biggest lever is stock, not price", False)
+        if b == "b_competitive":
+            return ("Competitive pressure — trimming risks share",
+                    "monitor the competitor price index; act when pressure clears", False)
+        if not bool(r.get("cat_ok", True)):
+            return (f"Category model below fit floor (R² {float(r.get('cat_r2') or 0):.2f} "
+                    f"< {CAT_R2_FLOOR:.2f})",
+                    "more weekly exports for the whole category", False)
+        if n_wk and n_wk < MIN_WEEKS:
+            ready = today + datetime.timedelta(weeks=int(MIN_WEEKS - n_wk))
+            return (f"Only {n_wk:.0f} weeks of history (need {MIN_WEEKS})",
+                    f"keep weekly exports coming — ready ≈ {ready:%d %b}", False)
+        if dstd < MIN_DISC_STD:
+            return (f"Discount never varies ({dstd:.1f} ppt std) — nothing to learn from",
+                    "a designed price test — see Unlock Pipeline", True)
+        mb, bb = r.get("marg_beta"), r.get("be_beta")
+        if bool(r.get("reliably_pays")):
+            return ("Discount reliably pays here",
+                    "protect — reinvest logic governs, not the cut wave", False)
+        if pd.notna(mb) and pd.notna(bb) and float(mb) < float(bb):
+            return ("Below pay-line, but the CI spans it — not reliable yet",
+                    "2–4 more weekly exports OR a designed test — see Unlock Pipeline", True)
+        return ("No confident signal either way",
+                "monitor — re-evaluated automatically every run", False)
+
+    hc = d.apply(_classify, axis=1, result_type="expand")
+    d["hold_reason"], d["unlock_when"], d["test_candidate"] = hc[0], hc[1], hc[2]
     return d
 
 
@@ -280,7 +345,8 @@ def sheet_stage3(wb, d):
                "Incremental revenue Rs/mo (slice)",
                "REVENUE ROI (incr. revenue ÷ slice cost)",
                "Marginal ROI (last point)", "Net gain if trimmed Rs/mo",
-               "Economic verdict", "Why (engine's reason)"]
+               "Economic verdict", "Why (engine's reason)",
+               "Held because", "Unlocks when"]
     rows = []
     for _, r in dd.iterrows():
         roi = r["rev_roi"]
@@ -306,15 +372,64 @@ def sheet_stage3(wb, d):
                      round(float(roi), 2) if pd.notna(roi) else None,
                      round(float(r["marginal_roas"]), 2) if pd.notna(r.get("marginal_roas")) else None,
                      round(float(r["net_gain_mo"])) if pd.notna(r.get("net_gain_mo")) else None,
-                     ev, str(r.get("decision_reason", ""))[:80]])
+                     ev, str(r.get("decision_reason", ""))[:80],
+                     r["hold_reason"], r["unlock_when"]])
     fmts = {8: "#,##0", 9: "#,##0", 10: "#,##0", 13: "#,##0"}
     _write_table(ws, "Stage 3 — Did the discount create ECONOMIC value?",
                  "The metric is Incremental Revenue ÷ Discount Cost (not sales uplift "
                  "alone). ROI < 1 = the discount costs more revenue than it brings. "
-                 "Every figure is observable — units, price, spend — no cost assumptions.",
+                 "Every held cell names its reason AND its unlock condition — a "
+                 "schedule, not a refusal. All figures observable; no cost assumptions.",
                  headers, rows,
-                 [10, 22, 30, 9, 12, 15, 8, 11, 12, 12, 13, 9, 11, 26, 50],
+                 [10, 22, 30, 9, 12, 15, 8, 11, 12, 12, 13, 9, 11, 26, 42, 34, 40],
                  fmts, verdict_col=14)
+
+
+def sheet_unlock(wb, d):
+    ws = wb.create_sheet("Unlock Pipeline")
+    tc = d[d["test_candidate"].fillna(False).astype(bool)].copy()
+    tc = tc.sort_values("slice_cost_mo", ascending=False).reset_index(drop=True)
+    today = datetime.date.today()
+    next_monday = today + datetime.timedelta(days=((7 - today.weekday()) % 7) or 7)
+
+    def _wave(i):
+        return (i // WAVE_SIZE) + 1
+
+    def _start(i):
+        w = _wave(i)
+        return (next_monday + datetime.timedelta(weeks=(w - 1) * WAVE_GAP_WEEKS)) \
+            if w <= 3 else None
+
+    headers = ["product_id", "cell_id", "Product", "Pack", "City", "Category",
+               "Wave", "Start week", "Disc % now", "Test move to %",
+               "Value at stake Rs/mo", "OSA %", "Weeks",
+               "Why a test is needed", "Safety rail"]
+    rows = []
+    for i, r in tc.iterrows():
+        gapv = float(r["cur_disc"]) - float(r["floor"])
+        test_to = float(r["floor"]) if gapv <= 3.0 else float(r["cur_disc"]) - 3.0
+        st = _start(i)
+        rows.append([r["product_id"], r["cell_id"], str(r["title"])[:38],
+                     r.get("grammage", ""), r["city"], r["category"],
+                     f"Wave {_wave(i)}" if _wave(i) <= 3 else "Backlog",
+                     f"{st:%d %b %Y}" if st else "after wave 3 confirms",
+                     round(float(r["cur_disc"]), 1), round(test_to, 1),
+                     round(float(r["slice_cost_mo"])),
+                     round(float(r.get("osa_mean") or 0)),
+                     r.get("n_weeks"), r["hold_reason"], KILL_SWITCH])
+    stake_w13 = float(tc.head(3 * WAVE_SIZE)["slice_cost_mo"].sum())
+    stake_all = float(tc["slice_cost_mo"].sum())
+    fmts = {11: "#,##0"}
+    _write_table(
+        ws, "Unlock Pipeline — how held value converts into bankable value",
+        f"{len(tc)} cells only a DESIGNED test can unlock. Waves of {WAVE_SIZE} cells, "
+        f"{WAVE_GAP_WEEKS} weeks apart, each protected by the kill-switch. Value at "
+        f"stake: Rs.{stake_w13:,.0f}/mo in waves 1–3 (Rs.{stake_all:,.0f}/mo total "
+        f"queue). SCENARIO, not promise: if 30–50% of a wave confirms, roughly that "
+        f"share of its stake becomes bankable; the rest reverts at ~zero cost — and "
+        f"either way the cell's true response is learned.",
+        headers, rows,
+        [10, 22, 30, 9, 12, 15, 8, 12, 8, 8, 12, 6, 6, 40, 34], fmts)
 
 
 def sheet_elasticity(wb, d):
@@ -414,6 +529,10 @@ def sheet_summary(wb, d, run):
         ("Below pay-line but HELD (stock/competitive/monitor)", n_held),
         ("Cells uncertain (monitor/test)", n_unc),
         ("Confident recoverable value if trimmed, Rs/mo", round(cut_gain)),
+        ("Value at stake in the Unlock Pipeline (test queue), Rs/mo",
+         round(float(pd.to_numeric(
+             d.loc[d["test_candidate"].fillna(False).astype(bool), "slice_cost_mo"],
+             errors="coerce").sum()))),
     ]
     r0 = 4
     for i, (k, v) in enumerate(facts):
@@ -475,6 +594,14 @@ def sheet_readme(wb):
         ("(floor→today). ROI < 1 = the discount costs more than the revenue it brings.", 9, False),
         ("'Marginal ROI' asks the same at the margin: does the LAST point pay?", 9, False),
         ("", 9, False),
+        ("HELD CELLS AND THE UNLOCK PIPELINE", 11, True),
+        ("No cell is ever just 'HELD': Stage 3 names WHY (the engine's own gate) and", 9, False),
+        ("WHAT UNLOCKS it — more weeks (with a ready date), an availability fix, or a", 9, False),
+        ("designed price test. Cells only a test can unlock are scheduled on the", 9, False),
+        ("'Unlock Pipeline' sheet in waves, each protected by the kill-switch (a test", 9, False),
+        ("that misses prediction twice auto-reverts). Held value is a queue with a", 9, False),
+        ("schedule, not money the model refuses to discuss.", 9, False),
+        ("", 9, False),
         ("WHEN THE BRAND ASKS: 'WHAT'S THE ELASTICITY, AND HOW ACCURATE IS IT?'", 11, True),
         ("Elasticity per SKU x city: open 'Elasticity & Accuracy' — quote the price", 9, False),
         ("elasticity WITH its 95% CI, and note the second, independently-estimated", 9, False),
@@ -519,6 +646,7 @@ def main():
     sheet_stage1(wb, d)
     sheet_stage2(wb, d)
     sheet_stage3(wb, d)
+    sheet_unlock(wb, d)
     sheet_elasticity(wb, d)
     wb.save(OUT_XLSX)
     print(f"[stage-report] wrote {OUT_XLSX}")
