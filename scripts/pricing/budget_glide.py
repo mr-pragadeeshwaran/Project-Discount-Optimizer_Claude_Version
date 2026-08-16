@@ -233,7 +233,8 @@ def main():
                 "revenue_delta_pct": round((ch["revenue_wk"] / base["revenue_wk"] - 1) * 100, 3),
                 "net_revenue_delta_mo": round(
                     ((ch["revenue_wk"]) - (base["revenue_wk"])) * MONTH),
-                "profit_delta_mo": round((ch["profit_wk"] - base["profit_wk"]) * MONTH),
+                # NB: no profit column by design — profit would need a COGS
+                # assumption; this surface stays in observable revenue space.
                 "cells_moved": int(moved.sum()),
                 "cells_below_observed_range": int(below_obs.sum()),
                 "target_hit": bool(hit),
@@ -269,7 +270,7 @@ def _write_md(glide, base, run_name):
         "discount scaled equally — what a brand does unaided) and **smart** (worst "
         "marginal-ROI discounts cut first, per the budget allocator's ladder). The "
         "gap between them is the value of allocating the change well.\n",
-        "| Budget | Mode | Spend/mo | Wt disc | Sales Δ (band) | Revenue Δ | Profit Δ/mo | Cells moved | Extrapolating |",
+        "| Budget | Mode | Spend/mo | Wt disc | Sales Δ (band) | Revenue Δ | Net revenue Δ/mo | Cells moved | Extrapolating |",
         "|---|---|---:|---:|---|---:|---:|---:|---:|",
     ]
     for _, x in glide.iterrows():
@@ -277,7 +278,7 @@ def _write_md(glide, base, run_name):
                 f"({x['sales_units_delta_pct_least']:+.2f}..{x['sales_units_delta_pct_most']:+.2f})")
         L.append(f"| {x['budget_change_pct']:+.0f}% | {x['mode']} | "
                  f"Rs.{x['spend_mo']:,.0f} | {x['weighted_disc_pct']:.2f}% | {band} | "
-                 f"{x['revenue_delta_pct']:+.2f}% | Rs.{x['profit_delta_mo']:+,.0f} | "
+                 f"{x['revenue_delta_pct']:+.2f}% | Rs.{x['net_revenue_delta_mo']:+,.0f} | "
                  f"{x['cells_moved']} | {x['cells_below_observed_range']}")
     L += [
         "",

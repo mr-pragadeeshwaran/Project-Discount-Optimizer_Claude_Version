@@ -73,13 +73,6 @@ def _clean_pid(v):
     return s
 
 
-def _contribution_unit(price, mrp):
-    """Per-unit contribution under the engine's cost structure (COGS proxy)."""
-    return (price - (float(cfg.DEFAULT_COGS_PCT) * mrp
-                     + float(cfg.DEFAULT_COMMISSION_PCT) * price
-                     + float(cfg.DEFAULT_FULFILLMENT_FEE)))
-
-
 def load_joined(run):
     ac = pd.read_csv(os.path.join(run, "plan", "all_cells.csv"))
     rec = pd.read_csv(os.path.join(run, "recommendations.csv"))
@@ -118,16 +111,15 @@ def load_joined(run):
     d["uplift_pct"] = (np.where(u_floor > 0, u_now / u_floor - 1.0, 0.0)) * 100
     d["incr_units_wk"] = u_now - u_floor
     d["rev_uplift_wk"] = u_now * p_now - u_floor * p_floor
-    contrib_now = u_now * _contribution_unit(p_now, mrp)
-    contrib_floor = u_floor * _contribution_unit(p_floor, mrp)
-    d["margin_impact_wk"] = contrib_now - contrib_floor
-    d["incr_contrib_mo"] = d["margin_impact_wk"] * MONTH
+    d["incr_rev_mo"] = d["rev_uplift_wk"] * MONTH
 
     spend_now_wk = pd.to_numeric(d["disc_spend_mo"], errors="coerce").fillna(0.0) / MONTH
     spend_floor_wk = u_floor * mrp * (d["floor"] / 100.0)
     d["slice_cost_mo"] = ((spend_now_wk - spend_floor_wk) * MONTH).clip(lower=0)
-    d["contrib_roi"] = np.where(d["slice_cost_mo"] > 1.0,
-                                d["incr_contrib_mo"] / d["slice_cost_mo"], np.nan)
+    # Revenue ROI — everything observable, no cost assumptions: did the extra
+    # revenue the discount slice brought exceed what the slice cost?
+    d["rev_roi"] = np.where(d["slice_cost_mo"] > 1.0,
+                            d["incr_rev_mo"] / d["slice_cost_mo"], np.nan)
 
     # Verdicts carry the engine's BUCKET-BEFORE-ACTION rule: a cell can be
     # statistically below the pay-line yet availability-constrained — the
@@ -182,12 +174,12 @@ def _write_table(ws, title, subtitle, headers, rows, widths, fmts, verdict_col=N
 
 def sheet_stage1(wb, d):
     ws = wb.create_sheet("Stage 1 — Discount Response")
-    dd = d.sort_values(["verdict", "margin_impact_wk"])
+    dd = d.sort_values(["verdict", "rev_uplift_wk"])
     headers = ["product_id", "cell_id", "Product", "Pack", "City", "Category",
                "Weeks", "OSA %", "Disc % now", "Price now", "MRP", "Units/wk",
                "Response per +1pt (% units)", "Pay-line per pt (%)",
                "Sales uplift % (vs proven floor)", "Incremental units/wk",
-               "Revenue uplift Rs/wk", "Margin impact Rs/wk", "Verdict", "Confidence"]
+               "Revenue uplift Rs/wk", "Verdict", "Confidence"]
     rows = [[r["product_id"], r["cell_id"], str(r["title"])[:38],
              r.get("grammage", ""), r["city"], r["category"], r.get("n_weeks"),
              round(float(r["osa_mean"]), 0), round(float(r["cur_disc"]), 1),
@@ -196,17 +188,17 @@ def sheet_stage1(wb, d):
              round(float(r["marg_beta"]) * 100, 3) if pd.notna(r["marg_beta"]) else None,
              round(float(r["be_beta"]) * 100, 3) if pd.notna(r["be_beta"]) else None,
              round(float(r["uplift_pct"]), 2), round(float(r["incr_units_wk"]), 1),
-             round(float(r["rev_uplift_wk"])), round(float(r["margin_impact_wk"])),
+             round(float(r["rev_uplift_wk"])),
              r["verdict"], r["confidence"]]
             for _, r in dd.iterrows()]
-    fmts = {10: "0.0", 12: "#,##0.0", 17: "#,##0", 18: "#,##0"}
+    fmts = {10: "0.0", 12: "#,##0.0", 17: "#,##0"}
     _write_table(ws, "Stage 1 — Where does discount increase sales?",
                  "Response ISOLATED from availability, ad visibility, competition and "
                  "season. Uplift measured vs each cell's OBSERVED floor discount — never "
-                 "an extrapolated zero. Margin uses the 50%-of-MRP COGS PROXY.",
+                 "an extrapolated zero. All figures observable: units, price, revenue.",
                  headers, rows,
-                 [10, 22, 30, 9, 12, 15, 6, 6, 8, 8, 7, 9, 11, 10, 11, 11, 11, 11, 30, 12],
-                 fmts, verdict_col=19)
+                 [10, 22, 30, 9, 12, 15, 6, 6, 8, 8, 7, 9, 11, 10, 11, 11, 11, 30, 12],
+                 fmts, verdict_col=18)
 
 
 def sheet_stage2(wb, d):
@@ -243,17 +235,17 @@ def sheet_stage2(wb, d):
 
 def sheet_stage3(wb, d):
     ws = wb.create_sheet("Stage 3 — Promotion ROI")
-    dd = d.sort_values("contrib_roi")
+    dd = d.sort_values("rev_roi")
     headers = ["product_id", "cell_id", "Product", "Pack", "City", "Category",
                "Disc % now", "Discount cost Rs/mo (total)",
                "Trimmable slice cost Rs/mo (floor→now)",
-               "Incremental contribution Rs/mo (slice)",
-               "CONTRIBUTION ROI (incr. contribution ÷ slice cost)",
+               "Incremental revenue Rs/mo (slice)",
+               "REVENUE ROI (incr. revenue ÷ slice cost)",
                "Marginal ROI (last point)", "Net gain if trimmed Rs/mo",
                "Economic verdict", "Why (engine's reason)"]
     rows = []
     for _, r in dd.iterrows():
-        roi = r["contrib_roi"]
+        roi = r["rev_roi"]
         b = str(r.get("bucket", ""))
         if bool(r.get("reliably_pays")):
             ev = "CREATES VALUE — protect / consider reinvest"
@@ -272,17 +264,16 @@ def sheet_stage3(wb, d):
                      round(float(r["cur_disc"]), 1),
                      round(float(r["disc_spend_mo"])) if pd.notna(r["disc_spend_mo"]) else None,
                      round(float(r["slice_cost_mo"])),
-                     round(float(r["incr_contrib_mo"])),
+                     round(float(r["incr_rev_mo"])),
                      round(float(roi), 2) if pd.notna(roi) else None,
                      round(float(r["marginal_roas"]), 2) if pd.notna(r.get("marginal_roas")) else None,
                      round(float(r["net_gain_mo"])) if pd.notna(r.get("net_gain_mo")) else None,
                      ev, str(r.get("decision_reason", ""))[:80]])
     fmts = {8: "#,##0", 9: "#,##0", 10: "#,##0", 13: "#,##0"}
     _write_table(ws, "Stage 3 — Did the discount create ECONOMIC value?",
-                 "The metric is Incremental Contribution ÷ Discount Cost (not sales "
-                 "uplift). ROI < 1 = the discount costs more than the margin it brings. "
-                 "Contribution uses the 50% COGS PROXY until real per-SKU costs arrive — "
-                 "every rupee figure inherits it.",
+                 "The metric is Incremental Revenue ÷ Discount Cost (not sales uplift "
+                 "alone). ROI < 1 = the discount costs more revenue than it brings. "
+                 "Every figure is observable — units, price, spend — no cost assumptions.",
                  headers, rows,
                  [10, 22, 30, 9, 12, 15, 8, 11, 12, 12, 13, 9, 11, 26, 50],
                  fmts, verdict_col=14)
@@ -363,14 +354,13 @@ def sheet_readme(wb):
         ("a cut is issued only where BOTH engines agree, moved max 3ppt/week (glide).", 9, False),
         ("", 9, False),
         ("STAGE 3 — DID THE DISCOUNT CREATE ECONOMIC VALUE?", 11, True),
-        ("CONTRIBUTION ROI = incremental contribution / cost of the trimmable discount", 9, False),
-        ("slice (floor→today), on the engine's cost structure. ROI < 1 destroys value.", 9, False),
+        ("REVENUE ROI = incremental revenue / cost of the trimmable discount slice", 9, False),
+        ("(floor→today). ROI < 1 = the discount costs more than the revenue it brings.", 9, False),
         ("'Marginal ROI' asks the same at the margin: does the LAST point pay?", 9, False),
         ("", 9, False),
         ("HONESTY NOTES — READ BEFORE QUOTING", 11, True),
-        (f"1. Costs use the {float(cfg.DEFAULT_COGS_PCT)*100:.0f}%-of-MRP COGS PROXY + "
-         f"{float(cfg.DEFAULT_COMMISSION_PCT)*100:.0f}% commission + Rs.{float(cfg.DEFAULT_FULFILLMENT_FEE):.0f}/unit "
-         "fulfilment. Real per-SKU costs will move every margin figure.", 9, False),
+        ("1. Every number is OBSERVABLE — units, prices, revenue, discount spend. No cost", 9, False),
+        ("   assumptions (COGS/commission) enter any figure in this workbook.", 9, False),
         ("2. ~10 weeks of data: many cells carry category-level (shrunk) estimates and are", 9, False),
         ("   marked Low/Experimental confidence. Act on High; test the rest.", 9, False),
         ("3. Values-only snapshot generated from the run named on the Summary sheet;", 9, False),
@@ -399,4 +389,8 @@ def main():
 
 
 if __name__ == "__main__":
+    # Optional output-path override (e.g. when the canonical file is locked
+    # open in Excel): python build_stage_workbook.py <out.xlsx>
+    if len(sys.argv) > 1:
+        OUT_XLSX = os.path.abspath(sys.argv[1])
     main()
