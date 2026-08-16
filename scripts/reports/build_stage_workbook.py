@@ -241,6 +241,15 @@ def load_joined(run):
 
     hc = d.apply(_classify, axis=1, result_type="expand")
     d["hold_reason"], d["unlock_when"], d["test_candidate"] = hc[0], hc[1], hc[2]
+
+    # Wave assignment (shared by Unlock Pipeline, Confidence Growth, calendar):
+    # test candidates ranked by value at stake, waves of WAVE_SIZE, top 3 waves.
+    d["wave"] = ""
+    _tc = d["test_candidate"].fillna(False).astype(bool)
+    _order = d.loc[_tc].sort_values("slice_cost_mo", ascending=False).index
+    for _i, _idx in enumerate(_order):
+        d.loc[_idx, "wave"] = (f"Wave {(_i // WAVE_SIZE) + 1}"
+                               if (_i // WAVE_SIZE) < 3 else "Backlog")
     return d
 
 
@@ -470,6 +479,103 @@ def sheet_elasticity(wb, d):
                  [10, 22, 30, 9, 12, 15, 9, 8, 8, 11, 9, 7, 8, 10, 9, 10, 10, 10, 12], {})
 
 
+def _project_tiers(d, add_weeks, with_waves):
+    """Project confidence tiers +N weeks out, using the PUBLISHED score formula
+    (0.25 density + 0.20 variation + 0.20 fit + 0.15 plausibility + 0.20
+    tightness). Only density (rows accrue weekly) and — when waves run —
+    variation (a test adds ≥2 distinct discount levels) are advanced; fit,
+    plausibility and CI tightness are held constant even though they normally
+    improve with data, so this projection is a FLOOR, not a promise."""
+    n_wk = pd.to_numeric(d["n_weeks"], errors="coerce")
+    n_tr = pd.to_numeric(d.get("n_train"), errors="coerce").fillna(0)
+    lvl = pd.to_numeric(d.get("n_discount_levels"), errors="coerce").fillna(0)
+    score = pd.to_numeric(d.get("confidence_score"), errors="coerce").fillna(0)
+    rate = (n_tr / n_wk.replace(0, np.nan)).fillna(0)
+    dens1 = np.clip(n_tr / 120.0, 0, 1)
+    dens2 = np.clip((n_tr + rate * add_weeks) / 120.0, 0, 1)
+    var1 = np.clip(lvl / 15.0, 0, 1)
+    waves_done = {4: ["Wave 1"], 8: ["Wave 1", "Wave 2"],
+                  12: ["Wave 1", "Wave 2", "Wave 3"]}.get(add_weeks, [])
+    bonus = (d["wave"].isin(waves_done) & with_waves).astype(float) * 2.0
+    var2 = np.clip((lvl + bonus) / 15.0, 0, 1)
+    s2 = np.clip(score + 25.0 * (dens2 - dens1) + 20.0 * (var2 - var1), 0, 100)
+    return {"HIGH": int((s2 >= 70).sum()), "MEDIUM": int(((s2 >= 50) & (s2 < 70)).sum()),
+            "LOW": int(((s2 >= 30) & (s2 < 50)).sum()), "DO_NOT_ACT": int((s2 < 30).sum())}
+
+
+def sheet_growth(wb, d):
+    ws = wb.create_sheet("Confidence Growth Plan")
+    ws.cell(1, 1, "Confidence Growth Plan — how trust is manufactured, on a schedule"
+            ).font = F(14, True, INK)
+    ws.cell(2, 1, "Confidence is bought with data. Two purchases: weekly exports "
+                  "(passive) and designed test waves (active). Projection uses the "
+                  "engine's own scoring formula; fit and CI-tightness are held constant, "
+                  "so these counts are a FLOOR — reality usually does better."
+            ).font = NOTE_FONT
+
+    now = {"HIGH": int((pd.to_numeric(d["confidence_score"], errors="coerce") >= 70).sum()),
+           "MEDIUM": int(((pd.to_numeric(d["confidence_score"], errors="coerce") >= 50)
+                          & (pd.to_numeric(d["confidence_score"], errors="coerce") < 70)).sum())}
+    hdr = ["Horizon", "HIGH (data only)", "HIGH (data + waves)",
+           "MEDIUM (data only)", "MEDIUM (data + waves)"]
+    r0 = 4
+    for j, h in enumerate(hdr, 1):
+        c = ws.cell(r0, j, h)
+        c.font = Font(name="Arial", size=9, bold=True, color="FFFFFF")
+        c.fill = HEAD_FILL
+        c.alignment = Alignment(wrap_text=True, vertical="center")
+    lines = [("Today", now["HIGH"], now["HIGH"], now["MEDIUM"], now["MEDIUM"])]
+    for wks in (4, 8, 12):
+        p = _project_tiers(d, wks, with_waves=False)
+        a = _project_tiers(d, wks, with_waves=True)
+        lines.append((f"+{wks} weeks", p["HIGH"], a["HIGH"], p["MEDIUM"], a["MEDIUM"]))
+    for i, row in enumerate(lines, r0 + 1):
+        for j, v in enumerate(row, 1):
+            c = ws.cell(i, j, v); c.font = F(10); c.border = HAIR
+            if j > 1:
+                c.font = F(10, bold=(j == 3), color=INK)
+
+    # ── the 12-week calendar ──
+    today = datetime.date.today()
+    nm = today + datetime.timedelta(days=((7 - today.weekday()) % 7) or 7)
+    stake = {w: float(pd.to_numeric(
+        d.loc[d["wave"] == w, "slice_cost_mo"], errors="coerce").sum())
+        for w in ("Wave 1", "Wave 2", "Wave 3")}
+    r0 = r0 + len(lines) + 3
+    ws.cell(r0, 1, "THE 12-WEEK CALENDAR").font = F(11, True, INK)
+    cal_hdr = ["Week of", "Activity", "Cells", "Value at stake Rs/mo"]
+    for j, h in enumerate(cal_hdr, 1):
+        c = ws.cell(r0 + 1, j, h)
+        c.font = Font(name="Arial", size=9, bold=True, color="FFFFFF")
+        c.fill = HEAD_FILL
+    events = [
+        (0, f"Wave 1 goes live (−3ppt moves, floors respected); {KILL_SWITCH}",
+         WAVE_SIZE, stake["Wave 1"]),
+        (1, "Wave 1 monitored — weekly export scores predicted vs actual", "", ""),
+        (2, "Wave 1 monitored (second strike week)", "", ""),
+        (3, f"Wave 1 verdict: confirmed cells join the bankable set · Wave 2 live",
+         WAVE_SIZE, stake["Wave 2"]),
+        (4, "Wave 2 monitored", "", ""),
+        (5, "Wave 2 monitored", "", ""),
+        (6, "Wave 2 verdict · Wave 3 live", WAVE_SIZE, stake["Wave 3"]),
+        (7, "Wave 3 monitored", "", ""),
+        (8, "Wave 3 monitored", "", ""),
+        (9, "Wave 3 verdict — full testable queue resolved", "", ""),
+        (10, "Monthly rebuild with ~22 weeks of data — thin cells re-score", "", ""),
+        (11, "Review: bankable set + next wave selection from backlog", "", ""),
+    ]
+    for i, (wk, act, cells, stk) in enumerate(events, r0 + 2):
+        ws.cell(i, 1, f"{nm + datetime.timedelta(weeks=wk):%d %b}").font = F(9)
+        ws.cell(i, 2, act).font = F(9)
+        ws.cell(i, 3, cells).font = F(9)
+        c = ws.cell(i, 4, round(stk) if stk != "" else "")
+        c.font = F(9); c.number_format = "#,##0"
+        for j in range(1, 5):
+            ws.cell(i, j).border = HAIR
+    for j, w in enumerate([14, 78, 16, 18, 20], 1):
+        ws.column_dimensions[get_column_letter(j)].width = w
+
+
 def _accuracy_receipts(run):
     """Portfolio-level accuracy receipts, loaded defensively from the artifacts."""
     out = []
@@ -506,12 +612,53 @@ def _accuracy_receipts(run):
     return out
 
 
+def _staircase_rows(d):
+    """The Value Staircase: three steps, each with its evidence standard.
+    Step 3 reads the budget glide ladder's conservative (−2%, smart) rung."""
+    cut_gain = float(pd.to_numeric(
+        d.loc[d["bucket"] == "c_waste_cut", "net_gain_mo"], errors="coerce")
+        .clip(lower=0).sum())
+    stake = float(pd.to_numeric(
+        d.loc[d["wave"].isin(["Wave 1", "Wave 2", "Wave 3"]), "slice_cost_mo"],
+        errors="coerce").sum())
+    rows = [
+        ("STEP 1 — Bankable today", f"Rs.{cut_gain:,.0f}/mo",
+         "survived all 8 gates + Double ML; in this week's KAM sheet", GOOD_FILL),
+        ("STEP 2 — Test queue (Unlock Pipeline)",
+         f"Rs.{stake:,.0f}/mo at stake",
+         f"3 waves x {WAVE_SIZE} cells over ~9 weeks under the kill-switch; "
+         f"SCENARIO: 30-50% confirming => Rs.{0.3*stake:,.0f}-{0.5*stake:,.0f}/mo "
+         "joins Step 1", GREY_FILL),
+    ]
+    try:
+        g = pd.read_csv(os.path.join(ROOT, "output", "DISCOUNT_PLAN", "pricing",
+                                     "budget_glide.csv"))
+        r2 = g[(g["mode"] == "smart") & (g["budget_change_pct"] == -2.0)].iloc[0]
+        rows.append((
+            "STEP 3 — Reallocation upside (no waste needed)",
+            f"Rs.{abs(r2['spend_delta_mo']):,.0f}/mo spend freed",
+            f"trim worst-ROI slices within proven floors; projected revenue "
+            f"{r2['revenue_delta_pct']:+.1f}% (LOW-CONFIDENCE elasticities — "
+            "verify via the waves before quoting)", GREY_FILL))
+    except Exception:
+        pass
+    return rows
+
+
 def sheet_summary(wb, d, run):
     ws = wb.create_sheet("Portfolio Summary", 1)
     ws.cell(1, 1, "Portfolio Summary — the whole story on one sheet").font = F(14, True, INK)
     ws.cell(2, 1, f"Run {os.path.basename(run)} · {cfg.BRAND_NAME} on "
                   f"{cfg.PLATFORM_NAME} · amounts only, no verdicts on sufficiency"
             ).font = NOTE_FONT
+    ws.cell(4, 1, "THE VALUE STAIRCASE").font = F(12, True, INK)
+    for i, (label, amount, standard, fill) in enumerate(_staircase_rows(d)):
+        r = 5 + i
+        ws.cell(r, 1, label).font = F(10, bold=True, color=INK)
+        c = ws.cell(r, 2, amount); c.font = F(11, bold=True, color=INK); c.fill = fill
+        ws.cell(r, 3, standard).font = F(9, italic=True, color=MUTED)
+    ws.cell(9, 1, "Each step has a HIGHER evidence bar than the one below it — "
+                  "quote them together, never Step 1 alone.").font = NOTE_FONT
     n_works = int(d["reliably_pays"].fillna(False).astype(bool).sum())
     n_trim = int((d["bucket"] == "c_waste_cut").sum())
     n_held = int((d["reliably_waste"].fillna(False).astype(bool)
@@ -534,7 +681,7 @@ def sheet_summary(wb, d, run):
              d.loc[d["test_candidate"].fillna(False).astype(bool), "slice_cost_mo"],
              errors="coerce").sum()))),
     ]
-    r0 = 4
+    r0 = 11    # below the staircase block
     for i, (k, v) in enumerate(facts):
         ws.cell(r0 + i, 1, k).font = F(10)
         c = ws.cell(r0 + i, 2, v)
@@ -594,6 +741,17 @@ def sheet_readme(wb):
         ("(floor→today). ROI < 1 = the discount costs more than the revenue it brings.", 9, False),
         ("'Marginal ROI' asks the same at the margin: does the LAST point pay?", 9, False),
         ("", 9, False),
+        ("THE VALUE STAIRCASE (Summary sheet, top)", 11, True),
+        ("Three steps, each with a HIGHER evidence bar: bankable today (all gates) →", 9, False),
+        ("test queue (converts via waves) → reallocation upside (projection to verify).", 9, False),
+        ("Never quote Step 1 alone — it invites 'that's small'. The staircase is the story.", 9, False),
+        ("", 9, False),
+        ("CONFIDENCE GROWTH PLAN (its own sheet)", 11, True),
+        ("Confidence is bought with data: weekly exports grow density; designed test", 9, False),
+        ("waves add the discount variation flat pricing never provides. The projection", 9, False),
+        ("uses the engine's own scoring formula with fit held constant — a floor.", 9, False),
+        ("The 12-week calendar shows when each wave runs, is scored, and resolves.", 9, False),
+        ("", 9, False),
         ("HELD CELLS AND THE UNLOCK PIPELINE", 11, True),
         ("No cell is ever just 'HELD': Stage 3 names WHY (the engine's own gate) and", 9, False),
         ("WHAT UNLOCKS it — more weeks (with a ready date), an availability fix, or a", 9, False),
@@ -647,6 +805,7 @@ def main():
     sheet_stage2(wb, d)
     sheet_stage3(wb, d)
     sheet_unlock(wb, d)
+    sheet_growth(wb, d)
     sheet_elasticity(wb, d)
     wb.save(OUT_XLSX)
     print(f"[stage-report] wrote {OUT_XLSX}")
